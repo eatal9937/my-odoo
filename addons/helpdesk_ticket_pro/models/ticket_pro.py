@@ -92,6 +92,62 @@ class HelpdeskTicketPro(models.Model):
     
     deadline = fields.Datetime(string='SLA Deadline', tracking=True)
 
+    # Source / Channel (Support both Customer & Avaya cases)
+    ticket_source = fields.Selection([
+        ('customer', 'Customer Direct / Portal'),
+        ('phone_call', 'Voice PBX Recording'),
+        ('avaya_support', 'Avaya TAC Support'),
+        ('email', 'Email Notification'),
+        ('internal', 'Internal / Manual')
+    ], string='Source Channel', default='customer', tracking=True)
+
+    # Avaya Support Integration Fields (Optional / Conditional)
+    is_avaya_support = fields.Boolean(string='Avaya Support Case', default=False, tracking=True)
+    avaya_sr_number = fields.Char(string='Avaya SR #', tracking=True, index=True)
+    sold_to_id = fields.Char(string='Sold To #', tracking=True, index=True)
+    avaya_product = fields.Char(string='Avaya Product / Solution', tracking=True)
+    avaya_asset_id = fields.Char(string='Asset ID', tracking=True)
+    avaya_severity = fields.Selection([
+        ('p1', 'P1 - Critical (System Down)'),
+        ('p2', 'P2 - Major (Severe Impact)'),
+        ('p3', 'P3 - Minor (Degraded)'),
+        ('p4', 'P4 - Informational')
+    ], string='Avaya Severity', tracking=True)
+    avaya_status = fields.Char(string='Avaya Status', tracking=True, default='Assigned')
+    avaya_portal_url = fields.Char(string='Avaya Portal URL', compute='_compute_avaya_portal_url')
+
+    @api.depends('avaya_sr_number')
+    def _compute_avaya_portal_url(self):
+        for record in self:
+            if record.avaya_sr_number:
+                clean_sr = record.avaya_sr_number.strip()
+                record.avaya_portal_url = f"https://support.avaya.com/service-request/{clean_sr}"
+            else:
+                record.avaya_portal_url = False
+
+    @api.onchange('avaya_sr_number')
+    def _onchange_avaya_sr_number(self):
+        for record in self:
+            if record.avaya_sr_number:
+                record.is_avaya_support = True
+                record.ticket_source = 'avaya_support'
+
+    @api.onchange('avaya_severity')
+    def _onchange_avaya_severity(self):
+        sev_map = {'p1': '3', 'p2': '2', 'p3': '1', 'p4': '0'}
+        for record in self:
+            if record.avaya_severity in sev_map:
+                record.priority = sev_map[record.avaya_severity]
+
+    def action_open_avaya_portal(self):
+        self.ensure_one()
+        url = self.avaya_portal_url or "https://support.avaya.com/"
+        return {
+            'type': 'ir.actions.act_url',
+            'url': url,
+            'target': 'new',
+        }
+
     @api.onchange('priority', 'ticket_type')
     def _onchange_sla_calculation(self):
         for record in self:
@@ -116,6 +172,13 @@ class HelpdeskTicketPro(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
+            if vals.get('avaya_sr_number'):
+                vals['is_avaya_support'] = True
+                if not vals.get('ticket_source'):
+                    vals['ticket_source'] = 'avaya_support'
+            if vals.get('is_avaya_support') and vals.get('avaya_severity') and not vals.get('priority'):
+                sev_map = {'p1': '3', 'p2': '2', 'p3': '1', 'p4': '0'}
+                vals['priority'] = sev_map.get(vals['avaya_severity'], '0')
             if vals.get('name', 'New') == 'New':
                 vals['name'] = self.env['ir.sequence'].next_by_code('helpdesk.ticket.pro') or 'New'
         records = super().create(vals_list)
