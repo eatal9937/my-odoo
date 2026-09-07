@@ -121,7 +121,7 @@ class HelpdeskTicketPro(models.Model):
         for record in self:
             if record.avaya_sr_number:
                 clean_sr = record.avaya_sr_number.strip()
-                record.avaya_portal_url = f"https://support.avaya.com/service-request/{clean_sr}"
+                record.avaya_portal_url = f"https://support.avaya.com/support/en/secure/service-requests/displaySR?srNum={clean_sr}"
             else:
                 record.avaya_portal_url = False
 
