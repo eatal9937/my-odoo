@@ -140,7 +140,7 @@
             <!-- Digital Clock -->
             <div class="hidden lg:flex flex-col text-right pl-3 border-l border-slate-200 dark:border-noc-border">
                 <div id="digitalClock" class="font-outfit font-bold text-xl tracking-wider text-slate-900 dark:text-white leading-none">00:00:00</div>
-                <div id="calendarDate" class="text-[10px] text-slate-400 font-medium mt-1">Monday, Sep 7</div>
+                <div id="calendarDate" class="text-[10px] text-slate-400 font-medium mt-1">Today</div>
             </div>
         </div>
     </header>
@@ -159,30 +159,40 @@
 
         <!-- Filter Groups -->
         <div class="flex flex-wrap items-center gap-2">
-            <!-- Source Filter -->
+            <!-- Stage / Lifecycle Filter (Default is Active Only) -->
             <div class="flex items-center bg-slate-100 dark:bg-noc-900 p-0.5 rounded-lg border border-slate-200 dark:border-noc-border">
-                <button onclick="setFilter('source', 'all')" class="filter-source px-2.5 py-1 rounded-md text-[11px] font-semibold bg-white dark:bg-noc-700 text-slate-900 dark:text-white shadow-sm" data-val="all">All Sources</button>
-                <button onclick="setFilter('source', 'avaya')" class="filter-source px-2.5 py-1 rounded-md text-[11px] font-medium text-slate-500 hover:text-slate-900 dark:hover:text-white" data-val="avaya">
-                    <i class="fa-solid fa-shield-halved text-rose-500 mr-1"></i>Avaya Only
+                <button onclick="setFilter('stage', 'active')" class="filter-stage px-2.5 py-1 rounded-md text-[11px] font-semibold bg-white dark:bg-noc-700 text-slate-900 dark:text-white shadow-sm flex items-center gap-1" data-val="active">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    <span>Active Only</span>
+                    <span id="badgeFilterActive" class="opacity-75 font-bold">(0)</span>
                 </button>
-                <button onclick="setFilter('source', 'customer')" class="filter-source px-2.5 py-1 rounded-md text-[11px] font-medium text-slate-500 hover:text-slate-900 dark:hover:text-white" data-val="customer">
-                    <i class="fa-regular fa-user text-indigo-500 mr-1"></i>Customer Only
+                <button onclick="setFilter('stage', 'new')" class="filter-stage px-2 py-1 rounded-md text-[11px] font-medium text-slate-500 hover:text-slate-900 dark:hover:text-white" data-val="new">New</button>
+                <button onclick="setFilter('stage', 'in_progress')" class="filter-stage px-2 py-1 rounded-md text-[11px] font-medium text-slate-500 hover:text-slate-900 dark:hover:text-white" data-val="in_progress">Working</button>
+                <button onclick="setFilter('stage', 'waiting')" class="filter-stage px-2 py-1 rounded-md text-[11px] font-medium text-slate-500 hover:text-slate-900 dark:hover:text-white" data-val="waiting">Waiting</button>
+                <button onclick="setFilter('stage', 'closed')" class="filter-stage px-2.5 py-1 rounded-md text-[11px] font-medium text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center gap-1" data-val="closed">
+                    <i class="fa-solid fa-box-archive text-[10px] text-slate-400"></i>
+                    <span>Closed</span>
+                    <span id="badgeFilterClosed" class="opacity-75 font-bold">(0)</span>
                 </button>
+                <button onclick="setFilter('stage', 'all')" class="filter-stage px-2 py-1 rounded-md text-[11px] font-medium text-slate-500 hover:text-slate-900 dark:hover:text-white" data-val="all">All</button>
             </div>
 
             <!-- Priority Filter -->
             <div class="flex items-center bg-slate-100 dark:bg-noc-900 p-0.5 rounded-lg border border-slate-200 dark:border-noc-border">
                 <button onclick="setFilter('priority', 'all')" class="filter-prio px-2.5 py-1 rounded-md text-[11px] font-semibold bg-white dark:bg-noc-700 text-slate-900 dark:text-white shadow-sm" data-val="all">All Prios</button>
-                <button onclick="setFilter('priority', 'urgent')" class="filter-prio px-2.5 py-1 rounded-md text-[11px] font-medium text-slate-500 hover:text-rose-500" data-val="urgent">🔴 P1 Outage</button>
-                <button onclick="setFilter('priority', 'high')" class="filter-prio px-2.5 py-1 rounded-md text-[11px] font-medium text-slate-500 hover:text-amber-500" data-val="high">🟡 P2 Major</button>
+                <button onclick="setFilter('priority', 'p1')" class="filter-prio px-2 py-1 rounded-md text-[11px] font-medium text-slate-500 hover:text-rose-500" data-val="p1">🔴 P1 Outage</button>
+                <button onclick="setFilter('priority', 'p2')" class="filter-prio px-2 py-1 rounded-md text-[11px] font-medium text-slate-500 hover:text-amber-500" data-val="p2">🟡 P2 Major</button>
             </div>
 
-            <!-- Stage Filter -->
+            <!-- Source Filter -->
             <div class="flex items-center bg-slate-100 dark:bg-noc-900 p-0.5 rounded-lg border border-slate-200 dark:border-noc-border">
-                <button onclick="setFilter('stage', 'active')" class="filter-stage px-2.5 py-1 rounded-md text-[11px] font-semibold bg-white dark:bg-noc-700 text-slate-900 dark:text-white shadow-sm" data-val="active">Active (All)</button>
-                <button onclick="setFilter('stage', 'new')" class="filter-stage px-2.5 py-1 rounded-md text-[11px] font-medium text-slate-500 hover:text-slate-900 dark:hover:text-white" data-val="new">New</button>
-                <button onclick="setFilter('stage', 'in_progress')" class="filter-stage px-2.5 py-1 rounded-md text-[11px] font-medium text-slate-500 hover:text-slate-900 dark:hover:text-white" data-val="in_progress">Working</button>
-                <button onclick="setFilter('stage', 'solved')" class="filter-stage px-2.5 py-1 rounded-md text-[11px] font-medium text-slate-500 hover:text-slate-900 dark:hover:text-white" data-val="solved">Solved</button>
+                <button onclick="setFilter('source', 'all')" class="filter-source px-2.5 py-1 rounded-md text-[11px] font-semibold bg-white dark:bg-noc-700 text-slate-900 dark:text-white shadow-sm" data-val="all">All Sources</button>
+                <button onclick="setFilter('source', 'avaya')" class="filter-source px-2 py-1 rounded-md text-[11px] font-medium text-slate-500 hover:text-slate-900 dark:hover:text-white" data-val="avaya">
+                    <i class="fa-solid fa-shield-halved text-rose-500 mr-1"></i>Avaya TAC
+                </button>
+                <button onclick="setFilter('source', 'customer')" class="filter-source px-2 py-1 rounded-md text-[11px] font-medium text-slate-500 hover:text-slate-900 dark:hover:text-white" data-val="customer">
+                    <i class="fa-regular fa-user text-indigo-500 mr-1"></i>Customer
+                </button>
             </div>
         </div>
     </div>
@@ -190,82 +200,82 @@
     <!-- Main Content Area -->
     <main class="flex-grow flex flex-col p-4 md:p-5 overflow-hidden gap-4">
         
-        <!-- Top Row: Modern KPI Scorecards -->
+        <!-- Top Row: Modern KPI Scorecards (Strictly Active/Unclosed + 1 Dedicated Closed Card) -->
         <section class="grid grid-cols-2 lg:grid-cols-6 gap-3.5 shrink-0">
-            <!-- Active Incidents Card -->
-            <div onclick="setFilter('stage', 'active')" class="cursor-pointer bg-white/90 dark:bg-noc-800/90 border border-slate-200 dark:border-noc-border rounded-2xl p-4 flex flex-col justify-between transition-all duration-300 hover:scale-[1.02] shadow-sm">
+            <!-- 1. Total Active Incidents Card -->
+            <div onclick="setFilter('stage', 'active')" class="cursor-pointer bg-white/90 dark:bg-noc-800/90 border border-slate-200 dark:border-noc-border rounded-2xl p-4 flex flex-col justify-between transition-all duration-300 hover:scale-[1.02] shadow-sm hover:border-indigo-400">
                 <div class="flex justify-between items-center text-xs font-semibold text-slate-500 dark:text-slate-400">
-                    <span class="uppercase tracking-wider">Total Active</span>
+                    <span class="uppercase tracking-wider">Active Incidents</span>
                     <i class="fa-solid fa-layer-group text-indigo-500"></i>
                 </div>
                 <div class="mt-3 flex items-baseline justify-between">
-                    <h2 id="kpiTotalActive" class="font-outfit font-black text-3xl md:text-4xl text-slate-900 dark:text-white">0</h2>
-                    <span class="text-[10px] text-slate-400">In Progress Queue</span>
+                    <h2 id="kpiTotalActive" class="font-outfit font-black text-3xl md:text-4xl text-indigo-600 dark:text-indigo-400">0</h2>
+                    <span class="text-[10px] text-emerald-500 font-bold bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded">Unclosed Only</span>
                 </div>
             </div>
 
-            <!-- Urgent / P1 Outage Card -->
-            <div onclick="setFilter('priority', 'urgent')" class="cursor-pointer bg-white/90 dark:bg-noc-800/90 border border-rose-200 dark:border-rose-900/60 rounded-2xl p-4 flex flex-col justify-between transition-all duration-300 hover:scale-[1.02] shadow-sm glow-p1 animate-pulse-ring">
+            <!-- 2. P1 Outage Card -->
+            <div onclick="setPriorityFilter('p1')" class="cursor-pointer bg-white/90 dark:bg-noc-800/90 border border-rose-200 dark:border-rose-900/60 rounded-2xl p-4 flex flex-col justify-between transition-all duration-300 hover:scale-[1.02] shadow-sm glow-p1 animate-pulse-ring">
                 <div class="flex justify-between items-center text-xs font-semibold text-rose-600 dark:text-rose-400">
                     <span class="uppercase tracking-wider">P1 Critical</span>
                     <i class="fa-solid fa-triangle-exclamation text-rose-500 animate-bounce text-sm"></i>
                 </div>
                 <div class="mt-3 flex items-baseline justify-between">
-                    <h2 id="kpiUrgent" class="font-outfit font-black text-3xl md:text-4xl text-rose-600 dark:text-rose-400">0</h2>
+                    <h2 id="kpiP1" class="font-outfit font-black text-3xl md:text-4xl text-rose-600 dark:text-rose-400">0</h2>
                     <span class="text-[10px] text-rose-500/80 font-bold">Immediate Action</span>
                 </div>
             </div>
 
-            <!-- Avaya TAC Active Card -->
-            <div onclick="setFilter('source', 'avaya')" class="cursor-pointer bg-white/90 dark:bg-noc-800/90 border border-slate-200 dark:border-noc-border rounded-2xl p-4 flex flex-col justify-between transition-all duration-300 hover:scale-[1.02] shadow-sm glow-indigo">
-                <div class="flex justify-between items-center text-xs font-semibold text-indigo-600 dark:text-indigo-400">
-                    <span class="uppercase tracking-wider">Avaya TAC</span>
-                    <i class="fa-solid fa-server text-indigo-500"></i>
+            <!-- 3. P2 Major Card -->
+            <div onclick="setPriorityFilter('p2')" class="cursor-pointer bg-white/90 dark:bg-noc-800/90 border border-amber-200 dark:border-amber-900/60 rounded-2xl p-4 flex flex-col justify-between transition-all duration-300 hover:scale-[1.02] shadow-sm glow-amber">
+                <div class="flex justify-between items-center text-xs font-semibold text-amber-600 dark:text-amber-400">
+                    <span class="uppercase tracking-wider">P2 Major</span>
+                    <i class="fa-solid fa-bolt text-amber-500 text-sm"></i>
                 </div>
                 <div class="mt-3 flex items-baseline justify-between">
-                    <h2 id="kpiAvayaActive" class="font-outfit font-black text-3xl md:text-4xl text-indigo-600 dark:text-indigo-300">0</h2>
-                    <span class="text-[10px] text-slate-400">Auto-Synced</span>
+                    <h2 id="kpiP2" class="font-outfit font-black text-3xl md:text-4xl text-amber-600 dark:text-amber-300">0</h2>
+                    <span class="text-[10px] text-amber-500/80 font-bold">High Priority</span>
                 </div>
             </div>
 
-            <!-- New Incoming Card -->
-            <div onclick="setFilter('stage', 'new')" class="cursor-pointer bg-white/90 dark:bg-noc-800/90 border border-slate-200 dark:border-noc-border rounded-2xl p-4 flex flex-col justify-between transition-all duration-300 hover:scale-[1.02] shadow-sm glow-amber">
-                <div class="flex justify-between items-center text-xs font-semibold text-amber-600 dark:text-amber-400">
+            <!-- 4. New Incoming Card -->
+            <div onclick="setFilter('stage', 'new')" class="cursor-pointer bg-white/90 dark:bg-noc-800/90 border border-slate-200 dark:border-noc-border rounded-2xl p-4 flex flex-col justify-between transition-all duration-300 hover:scale-[1.02] shadow-sm hover:border-amber-400">
+                <div class="flex justify-between items-center text-xs font-semibold text-slate-500 dark:text-slate-400">
                     <span class="uppercase tracking-wider">New Incoming</span>
                     <i class="fa-solid fa-inbox text-amber-500"></i>
                 </div>
                 <div class="mt-3 flex items-baseline justify-between">
-                    <h2 id="kpiNew" class="font-outfit font-black text-3xl md:text-4xl text-amber-600 dark:text-amber-300">0</h2>
+                    <h2 id="kpiNew" class="font-outfit font-black text-3xl md:text-4xl text-slate-800 dark:text-slate-100">0</h2>
                     <span class="text-[10px] text-slate-400">Pending Triage</span>
                 </div>
             </div>
 
-            <!-- In Progress Card -->
-            <div onclick="setFilter('stage', 'in_progress')" class="cursor-pointer bg-white/90 dark:bg-noc-800/90 border border-slate-200 dark:border-noc-border rounded-2xl p-4 flex flex-col justify-between transition-all duration-300 hover:scale-[1.02] shadow-sm glow-cyan">
-                <div class="flex justify-between items-center text-xs font-semibold text-cyan-600 dark:text-cyan-400">
-                    <span class="uppercase tracking-wider">Troubleshooting</span>
+            <!-- 5. In Progress Card -->
+            <div onclick="setFilter('stage', 'in_progress')" class="cursor-pointer bg-white/90 dark:bg-noc-800/90 border border-slate-200 dark:border-noc-border rounded-2xl p-4 flex flex-col justify-between transition-all duration-300 hover:scale-[1.02] shadow-sm hover:border-cyan-400">
+                <div class="flex justify-between items-center text-xs font-semibold text-slate-500 dark:text-slate-400">
+                    <span class="uppercase tracking-wider">In Progress</span>
                     <i class="fa-solid fa-screwdriver-wrench text-cyan-500"></i>
                 </div>
                 <div class="mt-3 flex items-baseline justify-between">
                     <h2 id="kpiInProgress" class="font-outfit font-black text-3xl md:text-4xl text-cyan-600 dark:text-cyan-300">0</h2>
-                    <span class="text-[10px] text-slate-400">Under Engineer Care</span>
+                    <span class="text-[10px] text-slate-400">Under Care</span>
                 </div>
             </div>
 
-            <!-- Solved Today Card -->
-            <div onclick="setFilter('stage', 'solved')" class="cursor-pointer bg-white/90 dark:bg-noc-800/90 border border-slate-200 dark:border-noc-border rounded-2xl p-4 flex flex-col justify-between transition-all duration-300 hover:scale-[1.02] shadow-sm glow-emerald">
-                <div class="flex justify-between items-center text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                    <span class="uppercase tracking-wider">Resolved Today</span>
-                    <i class="fa-solid fa-circle-check text-emerald-500"></i>
+            <!-- 6. Closed / History Card (Dedicated Separation) -->
+            <div onclick="setFilter('stage', 'closed')" class="cursor-pointer bg-white/90 dark:bg-noc-800/90 border border-slate-200 dark:border-noc-border rounded-2xl p-4 flex flex-col justify-between transition-all duration-300 hover:scale-[1.02] shadow-sm hover:border-slate-400">
+                <div class="flex justify-between items-center text-xs font-semibold text-slate-500 dark:text-slate-400">
+                    <span class="uppercase tracking-wider">Closed History</span>
+                    <i class="fa-solid fa-box-archive text-slate-400"></i>
                 </div>
                 <div class="mt-3 flex items-baseline justify-between">
-                    <h2 id="kpiSolvedToday" class="font-outfit font-black text-3xl md:text-4xl text-emerald-600 dark:text-emerald-300">0</h2>
-                    <span class="text-[10px] text-slate-400">Closed in 24h</span>
+                    <h2 id="kpiClosed" class="font-outfit font-black text-3xl md:text-4xl text-slate-500 dark:text-slate-400">0</h2>
+                    <span class="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold hover:underline">Click to View</span>
                 </div>
             </div>
         </section>
 
-        <!-- Product / Solution Quick-Filter Badges -->
+        <!-- Product / Solution Quick-Filter Badges (Active counts only) -->
         <div id="productBadges" class="flex items-center gap-2 overflow-x-auto pb-1 shrink-0 text-xs">
             <span class="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider shrink-0 mr-1">Systems:</span>
             <!-- Dynamic Badges will render here -->
@@ -284,7 +294,7 @@
                             <i class="fa-solid fa-list-check text-indigo-500"></i>
                             Live Incident Stream
                         </h3>
-                        <span id="matchCount" class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-noc-700 text-slate-600 dark:text-slate-300">0 Tickets</span>
+                        <span id="matchCount" class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-noc-700 text-slate-600 dark:text-slate-300">0 Active Tickets</span>
                     </div>
 
                     <div class="flex items-center gap-2 text-xs text-slate-400">
@@ -326,11 +336,11 @@
                         </div>
                         <div id="kanbanColWaiting" class="flex-grow overflow-y-auto space-y-2.5 pr-1"></div>
                     </div>
-                    <!-- Column 4: Solved -->
+                    <!-- Column 4: Solved / Closed -->
                     <div class="flex flex-col bg-slate-50/70 dark:bg-noc-900/60 rounded-2xl p-3 border border-slate-200 dark:border-noc-border overflow-hidden">
-                        <div class="flex items-center justify-between pb-2 mb-2 border-b border-emerald-200 dark:border-emerald-900/40 font-semibold text-xs text-emerald-700 dark:text-emerald-400">
-                            <span><i class="fa-regular fa-circle-check mr-1.5 text-emerald-500"></i>Solved / Closed</span>
-                            <span id="kanbanCountSolved" class="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-[10px] font-bold">0</span>
+                        <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-300 dark:border-noc-border font-semibold text-xs text-slate-600 dark:text-slate-400">
+                            <span><i class="fa-solid fa-box-archive mr-1.5 text-slate-400"></i>Closed / History</span>
+                            <span id="kanbanCountSolved" class="px-2 py-0.5 rounded-full bg-slate-200 dark:bg-noc-800 text-[10px] font-bold">0</span>
                         </div>
                         <div id="kanbanColSolved" class="flex-grow overflow-y-auto space-y-2.5 pr-1"></div>
                     </div>
@@ -429,7 +439,7 @@
             search: '',
             source: 'all',
             priority: 'all',
-            stage: 'active',
+            stage: 'active', // Default: STRICTLY ACTIVE (UNCLOSED)
             product: 'all'
         };
         let refreshTimer = null;
@@ -476,7 +486,7 @@
                 'queue': '<i class="fa-solid fa-list-check text-indigo-500"></i> Live Incident Stream',
                 'kanban': '<i class="fa-solid fa-table-columns text-cyan-500"></i> Kanban Stage Pipeline',
                 'avaya': '<i class="fa-solid fa-satellite-dish text-rose-500"></i> Avaya TAC Incident NOC Board',
-                'table': '<i class="fa-solid fa-table text-emerald-500"></i> All Incidents Grid'
+                'table': '<i class="fa-solid fa-table text-emerald-500"></i> Incidents Data Grid'
             };
             document.getElementById('viewTitle').innerHTML = titleMap[mode] || '';
 
@@ -486,18 +496,25 @@
         // Filters Management
         function setFilter(type, val) {
             filters[type] = val;
-            
-            // Update button styles
+            updateFilterButtonUI(type, val);
+            renderCurrentView();
+        }
+
+        function setPriorityFilter(prio) {
+            setFilter('priority', prio);
+        }
+
+        function updateFilterButtonUI(type, val) {
             const cls = type === 'source' ? '.filter-source' : (type === 'priority' ? '.filter-prio' : '.filter-stage');
             document.querySelectorAll(cls).forEach(btn => {
                 if (btn.dataset.val === val) {
-                    btn.className = `${btn.className.split(' ')[0]} px-2.5 py-1 rounded-md text-[11px] font-semibold bg-white dark:bg-noc-700 text-slate-900 dark:text-white shadow-sm`;
+                    btn.classList.add('bg-white', 'dark:bg-noc-700', 'text-slate-900', 'dark:text-white', 'shadow-sm', 'font-semibold');
+                    btn.classList.remove('text-slate-500', 'font-medium');
                 } else {
-                    btn.className = `${btn.className.split(' ')[0]} px-2.5 py-1 rounded-md text-[11px] font-medium text-slate-500 hover:text-slate-900 dark:hover:text-white`;
+                    btn.classList.remove('bg-white', 'dark:bg-noc-700', 'text-slate-900', 'dark:text-white', 'shadow-sm', 'font-semibold');
+                    btn.classList.add('text-slate-500', 'font-medium');
                 }
             });
-
-            renderCurrentView();
         }
 
         function applyFilters() {
@@ -514,11 +531,13 @@
             renderCurrentView();
         }
 
-        // Filter Tickets Logic
+        // Filter Tickets Logic (Strict Active Filtering by Default)
         function getFilteredTickets() {
             if (!rawData || !rawData.tickets) return [];
             
             return rawData.tickets.filter(t => {
+                const isClosed = ['solved', 'closed'].includes(t.state);
+
                 // 1. Search Query
                 if (filters.search) {
                     const haystack = `${t.ref} ${t.subject} ${t.avaya_sr_number} ${t.customer} ${t.avaya_product} ${t.assigned_to}`.toLowerCase();
@@ -530,14 +549,20 @@
                 if (filters.source === 'customer' && t.is_avaya_support) return false;
 
                 // 3. Priority Filter
-                if (filters.priority === 'urgent' && t.priority !== '3' && t.avaya_severity !== 'p1') return false;
-                if (filters.priority === 'high' && t.priority !== '2' && t.avaya_severity !== 'p2') return false;
+                if (filters.priority === 'p1') {
+                    if (t.priority !== '3' && t.avaya_severity !== 'p1') return false;
+                }
+                if (filters.priority === 'p2') {
+                    if (t.priority !== '2' && t.avaya_severity !== 'p2') return false;
+                }
 
-                // 4. Stage Filter
-                if (filters.stage === 'active' && ['solved', 'closed'].includes(t.state)) return false;
+                // 4. Stage / Lifecycle Filter
+                if (filters.stage === 'active' && isClosed) return false;
                 if (filters.stage === 'new' && t.state !== 'new') return false;
                 if (filters.stage === 'in_progress' && t.state !== 'in_progress') return false;
-                if (filters.stage === 'solved' && !['solved', 'closed'].includes(t.state)) return false;
+                if (filters.stage === 'waiting' && t.state !== 'waiting') return false;
+                if (filters.stage === 'closed' && !isClosed) return false;
+                // 'all' passes both active and closed
 
                 // 5. Product Filter
                 if (filters.product !== 'all' && (t.avaya_product !== filters.product && t.category !== filters.product)) return false;
@@ -549,7 +574,16 @@
         // Render Current Active View
         function renderCurrentView() {
             const tickets = getFilteredTickets();
-            document.getElementById('matchCount').textContent = `${tickets.length} Ticket${tickets.length !== 1 ? 's' : ''}`;
+            const labelMap = {
+                'active': 'Active',
+                'closed': 'Closed',
+                'new': 'New',
+                'in_progress': 'Working',
+                'waiting': 'Waiting',
+                'all': 'Total'
+            };
+            const stageLabel = labelMap[filters.stage] || 'Filtered';
+            document.getElementById('matchCount').textContent = `${tickets.length} ${stageLabel} Ticket${tickets.length !== 1 ? 's' : ''}`;
 
             if (currentView === 'queue') {
                 renderQueueView(tickets);
@@ -572,7 +606,8 @@
                     <div class="h-64 flex flex-col justify-center items-center p-8 border border-dashed border-slate-200 dark:border-noc-border rounded-2xl">
                         <i class="fa-solid fa-inbox text-slate-300 dark:text-slate-600 text-4xl mb-3"></i>
                         <p class="text-slate-600 dark:text-slate-400 font-semibold text-sm">No Incidents Found</p>
-                        <p class="text-slate-400 dark:text-slate-500 text-xs mt-1">Try adjusting search or filter criteria.</p>
+                        <p class="text-slate-400 dark:text-slate-500 text-xs mt-1">Try selecting another filter or clearing search.</p>
+                        ${filters.stage === 'closed' ? '<button onclick="setFilter(\'stage\', \'active\')" class="mt-3 px-3 py-1 bg-indigo-600 text-white rounded-lg text-xs font-semibold">Switch to Active Tickets</button>' : ''}
                     </div>
                 `;
                 return;
@@ -581,8 +616,9 @@
             tickets.forEach(t => {
                 const card = document.createElement('div');
                 const isUrgent = t.priority === '3' || t.avaya_severity === 'p1';
+                const isClosed = ['solved', 'closed'].includes(t.state);
                 
-                card.className = `p-4 bg-white dark:bg-noc-900 border ${isUrgent ? 'border-rose-300 dark:border-rose-900/80 bg-rose-50/20' : 'border-slate-200/80 dark:border-noc-border'} rounded-2xl hover:border-indigo-300 dark:hover:border-indigo-500/50 transition-all duration-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-3.5 group`;
+                card.className = `p-4 bg-white dark:bg-noc-900 border ${isUrgent && !isClosed ? 'border-rose-300 dark:border-rose-900/80 bg-rose-50/20' : (isClosed ? 'border-slate-200/60 dark:border-noc-border opacity-85' : 'border-slate-200/80 dark:border-noc-border')} rounded-2xl hover:border-indigo-300 dark:hover:border-indigo-500/50 transition-all duration-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-3.5 group`;
 
                 // Badge Styles
                 const stageBadge = getStageBadge(t.state);
@@ -605,7 +641,7 @@
                             </div>
                             <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-slate-500 dark:text-slate-400">
                                 <span><i class="fa-solid fa-cube text-slate-400 mr-1"></i>${t.avaya_product || t.category}</span>
-                                ${t.customer ? `<span><i class="fa-regular fa-building text-slate-400 mr-1"></i>${t.customer}</span>` : ''}
+                                ${t.customer && t.customer !== 'Not Specified' ? `<span><i class="fa-regular fa-building text-slate-400 mr-1"></i>${t.customer}</span>` : ''}
                                 <span><i class="fa-regular fa-user text-slate-400 mr-1"></i>${t.assigned_to}</span>
                                 <span class="text-slate-400"><i class="fa-regular fa-clock mr-1"></i>${timeAgo(t.create_date)}</span>
                             </div>
@@ -641,7 +677,8 @@
             Object.values(cols).forEach(c => c.innerHTML = '');
 
             tickets.forEach(t => {
-                const targetKey = ['solved', 'closed'].includes(t.state) ? 'solved' : (cols[t.state] ? t.state : 'new');
+                const isClosed = ['solved', 'closed'].includes(t.state);
+                const targetKey = isClosed ? 'solved' : (cols[t.state] ? t.state : 'new');
                 counts[targetKey]++;
 
                 const card = document.createElement('div');
@@ -649,26 +686,40 @@
                 card.onclick = () => window.open(t.portal_url, '_blank');
 
                 card.innerHTML = `
-                    <div class="flex justify-between items-center text-[10px]">
-                        <span class="font-bold text-indigo-600 dark:text-indigo-400">${t.ref}</span>
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase">${t.ref}</span>
                         ${getPriorityBadge(t.priority, t.avaya_severity)}
                     </div>
-                    <h5 class="text-xs font-bold text-slate-800 dark:text-slate-200 line-clamp-2">${t.subject}</h5>
-                    <div class="flex justify-between items-center text-[10px] text-slate-400 pt-1 border-t border-slate-100 dark:border-noc-border">
-                        <span class="truncate max-w-[120px]">${t.customer || t.avaya_product}</span>
-                        <span>${timeAgo(t.create_date)}</span>
+                    <h5 class="text-xs font-bold text-slate-900 dark:text-white line-clamp-2">${t.subject}</h5>
+                    <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex justify-between items-center">
+                        <span class="truncate max-w-[130px]">${t.avaya_product || t.category}</span>
+                        <span class="text-[10px] text-slate-400">${timeAgo(t.create_date)}</span>
                     </div>
                 `;
                 cols[targetKey].appendChild(card);
             });
 
+            // Update Column Headers Count
             document.getElementById('kanbanCountNew').textContent = counts['new'];
             document.getElementById('kanbanCountInProgress').textContent = counts['in_progress'];
             document.getElementById('kanbanCountWaiting').textContent = counts['waiting'];
             document.getElementById('kanbanCountSolved').textContent = counts['solved'];
+
+            // If in Active Only mode and Solved is empty, show helpful prompt
+            if (filters.stage === 'active' && counts['solved'] === 0 && rawData && rawData.kpis.closed_total > 0) {
+                cols['solved'].innerHTML = `
+                    <div class="p-4 border border-dashed border-slate-300 dark:border-noc-border rounded-xl text-center text-slate-400 text-xs flex flex-col items-center justify-center gap-2 py-8">
+                        <i class="fa-solid fa-box-archive text-2xl text-slate-400"></i>
+                        <span>${rawData.kpis.closed_total} Closed Tickets</span>
+                        <button onclick="setFilter('stage', 'closed')" class="px-2.5 py-1 bg-slate-200 dark:bg-noc-800 hover:bg-indigo-600 hover:text-white text-slate-700 dark:text-slate-300 rounded-lg font-semibold transition text-[11px]">
+                            View Closed
+                        </button>
+                    </div>
+                `;
+            }
         }
 
-        // 3. AVAYA TAC VIEW RENDERING
+        // 3. AVAYA TAC NOC VIEW RENDERING
         function renderAvayaView(tickets) {
             const container = document.getElementById('viewAvayaContainer');
             container.innerHTML = '';
@@ -695,6 +746,7 @@
                             </span>
                             <span class="text-xs font-bold text-slate-800 dark:text-slate-200">${t.ref}</span>
                             ${getPriorityBadge(t.priority, t.avaya_severity)}
+                            ${getStageBadge(t.state)}
                         </div>
                         <div class="flex items-center gap-2">
                             ${t.avaya_portal_url ? `
@@ -755,9 +807,9 @@
         // Badge Helpers
         function getStageBadge(state) {
             if (state === 'new') return '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800">New</span>';
-            if (state === 'in_progress') return '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-50 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800">Work</span>';
-            if (state === 'waiting') return '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">Wait</span>';
-            return '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">Solved</span>';
+            if (state === 'in_progress') return '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-50 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800">Working</span>';
+            if (state === 'waiting') return '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">Waiting</span>';
+            return '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 dark:bg-noc-800 dark:text-slate-400 border border-slate-200 dark:border-noc-border">Closed</span>';
         }
 
         function getPriorityBadge(priority, severity) {
@@ -792,21 +844,25 @@
                 if (!res.ok) throw new Error('Network error');
                 rawData = await res.json();
 
-                // Update KPIs
+                // Update KPIs (Active unclosed + separated closed)
                 const k = rawData.kpis;
-                document.getElementById('kpiTotalActive').textContent = k.total_active;
-                document.getElementById('kpiUrgent').textContent = k.urgent;
-                document.getElementById('kpiAvayaActive').textContent = k.avaya_active;
-                document.getElementById('kpiNew').textContent = k.new;
-                document.getElementById('kpiInProgress').textContent = k.in_progress;
-                document.getElementById('kpiSolvedToday').textContent = k.solved_today;
-                document.getElementById('avayaBadgeCount').textContent = k.avaya_active;
+                document.getElementById('kpiTotalActive').textContent = k.total_active || 0;
+                document.getElementById('kpiP1').textContent = k.p1_critical || 0;
+                document.getElementById('kpiP2').textContent = k.p2_major || 0;
+                document.getElementById('kpiNew').textContent = k.new || 0;
+                document.getElementById('kpiInProgress').textContent = k.in_progress || 0;
+                document.getElementById('kpiClosed').textContent = k.closed_total || 0;
+                document.getElementById('avayaBadgeCount').textContent = k.avaya_active || 0;
+
+                // Update Filter Pill counts
+                document.getElementById('badgeFilterActive').textContent = `(${k.total_active || 0})`;
+                document.getElementById('badgeFilterClosed').textContent = `(${k.closed_total || 0})`;
 
                 // Audio Alarm for New Urgent Case
-                if (k.urgent > previousUrgentCount && previousUrgentCount !== 0) {
+                if (k.p1_critical > previousUrgentCount && previousUrgentCount !== 0) {
                     playChime();
                 }
-                previousUrgentCount = k.urgent;
+                previousUrgentCount = k.p1_critical || 0;
 
                 // Render Product Filter Badges
                 renderProductBadges(rawData.products);
@@ -865,66 +921,64 @@
                 div.innerHTML = `
                     <div class="flex justify-between items-center text-xs">
                         <span class="font-semibold text-slate-700 dark:text-slate-200">${a.agent_name}</span>
-                        <span class="font-bold text-slate-500 dark:text-slate-400">${a.active_tickets} tickets</span>
+                        <span class="font-bold text-slate-500 dark:text-slate-400">${a.active_tickets} active</span>
                     </div>
                     <div class="w-full h-1.5 bg-slate-100 dark:bg-noc-900 rounded-full overflow-hidden">
-                        <div class="h-full bg-gradient-to-r from-indigo-500 to-cyan-400 rounded-full" style="width: ${pct}%"></div>
+                        <div class="h-full bg-gradient-to-r from-indigo-500 to-cyan-500 rounded-full" style="width: ${pct}%"></div>
                     </div>
                 `;
                 list.appendChild(div);
             });
         }
 
-        // Theme Switcher
-        function toggleTheme() {
-            document.documentElement.classList.toggle('dark');
-            localStorage.setItem('noc_theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
-        }
-        if (localStorage.getItem('noc_theme') === 'light') {
-            document.documentElement.classList.remove('dark');
-        } else {
-            document.documentElement.classList.add('dark'); // Default Dark NOC
-        }
-
-        // Fullscreen Toggle
-        function toggleFullscreen() {
-            if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen().catch(e => {});
-            } else {
-                document.exitFullscreen();
-            }
-        }
-
-        // Audio Toggle
-        function toggleAudioAlert() {
-            soundEnabled = !soundEnabled;
-            const btn = document.getElementById('soundBtn');
-            btn.innerHTML = soundEnabled 
-                ? '<i class="fa-solid fa-volume-high text-sm text-indigo-500"></i>' 
-                : '<i class="fa-solid fa-volume-xmark text-sm text-slate-400"></i>';
-        }
-
-        // Refresh Rate Change
-        function changeRefreshInterval() {
-            const ms = parseInt(document.getElementById('refreshInterval').value);
-            clearInterval(refreshTimer);
-            if (ms > 0) {
-                refreshTimer = setInterval(fetchDashboardData, ms);
-            }
-        }
-
-        // Clock Update
+        // Live Clock
         function updateClock() {
             const now = new Date();
-            document.getElementById('digitalClock').textContent = now.toLocaleTimeString('en-US', { hour12: false });
+            document.getElementById('digitalClock').textContent = now.toLocaleTimeString('en-GB', { hour12: false });
             document.getElementById('calendarDate').textContent = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
         }
         setInterval(updateClock, 1000);
         updateClock();
 
+        // Theme Toggle
+        function toggleTheme() {
+            document.documentElement.classList.toggle('dark');
+            localStorage.theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+        }
+        if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+
+        // Audio Alert Toggle
+        function toggleAudioAlert() {
+            soundEnabled = !soundEnabled;
+            const btn = document.getElementById('soundBtn');
+            btn.innerHTML = soundEnabled ? '<i class="fa-solid fa-volume-high text-sm text-indigo-500"></i>' : '<i class="fa-solid fa-volume-xmark text-sm text-slate-400"></i>';
+        }
+
+        // Fullscreen Toggle
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(() => {});
+            } else {
+                if (document.exitFullscreen) document.exitFullscreen();
+            }
+        }
+
+        // Polling Controller
+        function changeRefreshInterval() {
+            const ms = parseInt(document.getElementById('refreshInterval').value);
+            if (refreshTimer) clearInterval(refreshTimer);
+            if (ms > 0) {
+                refreshTimer = setInterval(fetchDashboardData, ms);
+            }
+        }
+
         // Initial Load
         fetchDashboardData();
-        refreshTimer = setInterval(fetchDashboardData, 15000);
+        changeRefreshInterval();
     </script>
 </body>
 </html>

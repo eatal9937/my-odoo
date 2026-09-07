@@ -21,29 +21,50 @@ class HelpdeskDashboardController(http.Controller):
         
         today_start = datetime.combine(datetime.today(), time.min)
         
-        # KPI Counters
+        # 1. KPI Counters - strictly separating ACTIVE (unclosed) from CLOSED
         count_new = tickets_model.search_count([("state", "=", "new")])
         count_in_progress = tickets_model.search_count([("state", "=", "in_progress")])
         count_waiting = tickets_model.search_count([("state", "=", "waiting")])
-        count_solved_today = tickets_model.search_count([
-            ("state", "in", ["solved", "closed"]),
-            ("write_date", ">=", today_start)
+        count_active = count_new + count_in_progress + count_waiting
+        
+        # P1 Outage (strictly active and priority 3 or severity p1)
+        count_p1 = tickets_model.search_count([
+            "&",
+            ("state", "not in", ["solved", "closed"]),
+            "|", ("priority", "=", "3"), ("avaya_severity", "=", "p1")
         ])
-        count_urgent = tickets_model.search_count([
-            ("priority", "in", ["2", "3"]),
-            ("state", "not in", ["solved", "closed"])
+        
+        # P2 Major (strictly active and priority 2 or severity p2)
+        count_p2 = tickets_model.search_count([
+            "&",
+            ("state", "not in", ["solved", "closed"]),
+            "|", ("priority", "=", "2"), ("avaya_severity", "=", "p2")
         ])
+
+        # Active Avaya TAC tickets
         count_avaya = tickets_model.search_count([
             ("is_avaya_support", "=", True),
             ("state", "not in", ["solved", "closed"])
         ])
+        
+        # Active Customer Direct tickets
         count_customer = tickets_model.search_count([
             ("is_avaya_support", "=", False),
             ("state", "not in", ["solved", "closed"])
         ])
 
-        # Fetch tickets: recent active tickets plus recent solved
-        tickets = tickets_model.search([], order="priority desc, write_date desc", limit=120)
+        # Closed Tickets
+        count_closed_total = tickets_model.search_count([
+            ("state", "in", ["solved", "closed"])
+        ])
+        count_solved_today = tickets_model.search_count([
+            ("state", "in", ["solved", "closed"]),
+            ("write_date", ">=", today_start)
+        ])
+        count_total = tickets_model.search_count([])
+
+        # 2. Fetch tickets: active first, then recent closed tickets
+        tickets = tickets_model.search([], order="priority desc, write_date desc", limit=150)
 
         tickets_list = []
         product_counts = {}
@@ -53,6 +74,7 @@ class HelpdeskDashboardController(http.Controller):
             c_name = t.partner_id.name or t.avaya_customer_name or ""
             prod_name = t.avaya_product or t.category_id.name or "General"
             
+            # Count products and customers for ACTIVE tickets only
             if t.state not in ["solved", "closed"]:
                 if prod_name:
                     product_counts[prod_name] = product_counts.get(prod_name, 0) + 1
@@ -85,7 +107,7 @@ class HelpdeskDashboardController(http.Controller):
                 "portal_url": f"/web#id={t.id}&model=helpdesk.ticket.pro&view_type=form"
             })
 
-        # Agent Workload
+        # Agent Workload (Active tickets only)
         agents = request.env["res.users"].sudo().search([("share", "=", False)])
         agent_workload = []
         for agent in agents:
@@ -104,14 +126,18 @@ class HelpdeskDashboardController(http.Controller):
         result = {
             "current_time": fields.Datetime.now().isoformat() + "Z",
             "kpis": {
+                "total_active": count_active,
+                "p1_critical": count_p1,
+                "p2_major": count_p2,
                 "new": count_new,
                 "in_progress": count_in_progress,
                 "waiting": count_waiting,
-                "solved_today": count_solved_today,
-                "urgent": count_urgent,
                 "avaya_active": count_avaya,
                 "customer_active": count_customer,
-                "total_active": count_new + count_in_progress + count_waiting
+                "closed_total": count_closed_total,
+                "solved_today": count_solved_today,
+                "total_all": count_total,
+                "urgent": count_p1
             },
             "products": sorted([{"name": k, "count": v} for k, v in product_counts.items()], key=lambda x: x["count"], reverse=True)[:10],
             "customers": sorted([{"name": k, "count": v} for k, v in customer_counts.items()], key=lambda x: x["count"], reverse=True)[:10],
