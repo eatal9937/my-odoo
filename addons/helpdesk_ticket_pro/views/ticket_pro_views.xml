@@ -6,29 +6,49 @@
         <field name="arch" type="xml">
             <form string="Helpdesk Ticket">
                 <header>
+                    <button name="action_open_avaya_portal" type="object" string="🌐 Open in Avaya Support" class="btn-primary" invisible="not is_avaya_support or not avaya_sr_number"/>
                     <field name="state" widget="statusbar" statusbar_visible="new,in_progress,waiting,solved,closed" options="{'clickable': '1'}"/>
                 </header>
                 <sheet>
+                    <widget name="web_ribbon" title="AVAYA P1 CRITICAL" bg_color="text-bg-danger" invisible="not is_avaya_support or avaya_severity != 'p1'"/>
+                    <widget name="web_ribbon" title="AVAYA SUPPORT" bg_color="text-bg-warning" invisible="not is_avaya_support or avaya_severity == 'p1'"/>
                     <div class="oe_title">
                         <h1><field name="name" readonly="1"/></h1>
                         <h2><field name="subject" placeholder="Ticket Subject..."/></h2>
                     </div>
                     <group>
-                        <group>
+                        <group string="General Information">
                             <field name="partner_id" widget="res_partner_many2one"/>
                             <field name="ticket_type"/>
+                            <field name="ticket_source"/>
                             <field name="category_id"/>
                             <field name="tag_ids" widget="many2many_tags" options="{'color_field': 'color'}"/>
                         </group>
-                        <group>
+                        <group string="Assignment &amp; Urgency">
                             <field name="user_id" widget="many2one_avatar_user"/>
                             <field name="priority" widget="priority"/>
                             <field name="deadline"/>
+                            <field name="is_avaya_support" widget="boolean_toggle"/>
                         </group>
                     </group>
                     <notebook>
                         <page string="Description">
                             <field name="description" placeholder="Add description here..."/>
+                        </page>
+                        <page string="Avaya Support Details" invisible="not is_avaya_support">
+                            <group>
+                                <group string="Avaya Service Request (SR)">
+                                    <field name="avaya_sr_number" placeholder="e.g. 1-23770711142"/>
+                                    <field name="sold_to_id" placeholder="e.g. 0052085219"/>
+                                    <field name="avaya_product" placeholder="e.g. Avaya Aura Session Manager"/>
+                                    <field name="avaya_asset_id" placeholder="e.g. 1-60853371-3"/>
+                                </group>
+                                <group string="Avaya Severity &amp; Status">
+                                    <field name="avaya_severity"/>
+                                    <field name="avaya_status"/>
+                                    <field name="avaya_portal_url" widget="url" text="Open Avaya TAC Link" invisible="not avaya_portal_url"/>
+                                </group>
+                            </group>
                         </page>
                     </notebook>
                 </sheet>
@@ -53,6 +73,8 @@
                 <field name="user_id"/>
                 <field name="state"/>
                 <field name="tag_ids"/>
+                <field name="is_avaya_support"/>
+                <field name="avaya_sr_number"/>
                 <templates>
                     <t t-name="kanban-box">
                         <div class="oe_kanban_global_click">
@@ -64,6 +86,9 @@
                             <div class="o_kanban_record_body">
                                 <field name="partner_id"/>
                                 <div><field name="tag_ids" widget="many2many_tags" options="{'color_field': 'color'}"/></div>
+                                <t t-if="record.is_avaya_support.raw_value">
+                                    <div class="mt-1"><span class="badge text-bg-warning">Avaya SR: <t t-esc="record.avaya_sr_number.value"/></span></div>
+                                </t>
                             </div>
                             <div class="o_kanban_record_bottom mt-2">
                                 <div class="oe_kanban_bottom_left">
@@ -88,6 +113,8 @@
                 <field name="name" string="Ticket Ref." readonly="1" decoration-bf="1"/>
                 <field name="subject" string="หัวข้อปัญหา"/>
                 <field name="partner_id" string="ลูกค้า"/>
+                <field name="ticket_source" string="ช่องทาง" optional="show"/>
+                <field name="avaya_sr_number" string="Avaya SR#" optional="show"/>
                 <field name="category_id" optional="show"/>
                 <field name="tag_ids" widget="many2many_tags" options="{'color_field': 'color'}" optional="show"/>
                 <field name="user_id" string="ผู้รับผิดชอบ" widget="many2one_avatar_user"/>
@@ -97,6 +124,35 @@
                        decoration-info="state == 'in_progress'" 
                        decoration-success="state == 'solved'"/>
             </tree>
+        </field>
+    </record>
+
+    <!-- Search View with Filter for Avaya and Customer Cases -->
+    <record id="view_helpdesk_ticket_pro_search" model="ir.ui.view">
+        <field name="name">helpdesk.ticket.pro.search</field>
+        <field name="model">helpdesk.ticket.pro</field>
+        <field name="arch" type="xml">
+            <search string="Search Tickets">
+                <field name="name" string="Ticket or Subject" filter_domain="['|', ('name', 'ilike', self), ('subject', 'ilike', self)]"/>
+                <field name="partner_id" string="Customer"/>
+                <field name="avaya_sr_number" string="Avaya SR Number"/>
+                <field name="sold_to_id" string="Sold To #"/>
+                <field name="user_id" string="Assigned To"/>
+                <separator/>
+                <filter string="My Tickets" name="my_tickets" domain="[('user_id', '=', uid)]"/>
+                <filter string="Unassigned" name="unassigned" domain="[('user_id', '=', False)]"/>
+                <separator/>
+                <filter string="Avaya Support Cases" name="avaya_cases" domain="[('is_avaya_support', '=', True)]"/>
+                <filter string="Customer Direct Tickets" name="customer_cases" domain="[('is_avaya_support', '=', False)]"/>
+                <separator/>
+                <filter string="High &amp; Urgent" name="urgent_high" domain="[('priority', 'in', ['2', '3'])]"/>
+                <group expand="0" string="Group By">
+                    <filter string="Stage" name="group_stage" context="{'group_by': 'state'}"/>
+                    <filter string="Customer" name="group_partner" context="{'group_by': 'partner_id'}"/>
+                    <filter string="Source Channel" name="group_source" context="{'group_by': 'ticket_source'}"/>
+                    <filter string="Priority" name="group_priority" context="{'group_by': 'priority'}"/>
+                </group>
+            </search>
         </field>
     </record>
 
@@ -116,6 +172,7 @@
         <field name="name">All Tickets</field>
         <field name="res_model">helpdesk.ticket.pro</field>
         <field name="view_mode">kanban,list,form,graph,pivot,calendar</field>
+        <field name="search_view_id" ref="view_helpdesk_ticket_pro_search"/>
         <field name="domain">[('state', '!=', 'closed')]</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">สร้าง Ticket แรกของคุณ!</p>
