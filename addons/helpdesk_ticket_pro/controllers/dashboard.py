@@ -1,6 +1,7 @@
 import os
 import json
 from datetime import datetime, time
+from markupsafe import Markup
 from odoo import http, fields
 from odoo.http import request
 
@@ -149,3 +150,97 @@ class HelpdeskDashboardController(http.Controller):
             json.dumps(result),
             headers=[("Content-Type", "application/json"), ("Access-Control-Allow-Origin", "*")]
         )
+
+    @http.route("/helpdesk/api/check_ticket", type="http", auth="public", methods=["GET"], csrf=False)
+    def helpdesk_api_check_ticket(self, sr="", ref="", **kwargs):
+        tickets_model = request.env["helpdesk.ticket.pro"].sudo()
+        domain = []
+        if sr:
+            domain = [("avaya_sr_number", "=", sr.strip())]
+        elif ref:
+            domain = [("name", "=", ref.strip())]
+        else:
+            return request.make_response(
+                json.dumps({"exists": False, "error": "No search parameter provided"}),
+                headers=[("Content-Type", "application/json"), ("Access-Control-Allow-Origin", "*")]
+            )
+
+        ticket = tickets_model.search(domain, order="id desc", limit=1)
+        if ticket:
+            return request.make_response(
+                json.dumps({
+                    "exists": True,
+                    "id": ticket.id,
+                    "ref": ticket.name,
+                    "subject": ticket.subject,
+                    "state": ticket.state,
+                    "avaya_status": ticket.avaya_status or "",
+                    "avaya_sr_number": ticket.avaya_sr_number or "",
+                    "is_closed": ticket.state in ["closed", "solved"],
+                    "portal_url": f"https://phongthep.ddns.net/web#id={ticket.id}&model=helpdesk.ticket.pro&view_type=form"
+                }),
+                headers=[("Content-Type", "application/json"), ("Access-Control-Allow-Origin", "*")]
+            )
+
+        return request.make_response(
+            json.dumps({"exists": False}),
+            headers=[("Content-Type", "application/json"), ("Access-Control-Allow-Origin", "*")]
+        )
+
+    @http.route("/helpdesk/api/update_ticket", type="http", auth="public", methods=["POST"], csrf=False)
+    def helpdesk_api_update_ticket(self, **kwargs):
+        try:
+            data = json.loads(request.httprequest.data.decode("utf-8")) if request.httprequest.data else kwargs
+        except Exception:
+            data = kwargs
+
+        ticket_id = data.get("id")
+        sr_number = data.get("avaya_sr_number")
+        tickets_model = request.env["helpdesk.ticket.pro"].sudo()
+
+        ticket = None
+        if ticket_id:
+            ticket = tickets_model.browse(int(ticket_id))
+        elif sr_number:
+            ticket = tickets_model.search([("avaya_sr_number", "=", sr_number)], order="id desc", limit=1)
+
+        if not ticket or not ticket.exists():
+            return request.make_response(
+                json.dumps({"success": False, "error": "Ticket not found"}),
+                headers=[("Content-Type", "application/json"), ("Access-Control-Allow-Origin", "*")]
+            )
+
+        # Update status/severity if changed
+        update_vals = {}
+        if data.get("avaya_status") and data.get("avaya_status") != ticket.avaya_status:
+            update_vals["avaya_status"] = data["avaya_status"]
+        if data.get("avaya_severity") and data.get("avaya_severity") != ticket.avaya_severity:
+            update_vals["avaya_severity"] = data["avaya_severity"]
+            sev_map = {"p1": "3", "p2": "2", "p3": "1", "p4": "0"}
+            if data["avaya_severity"] in sev_map:
+                update_vals["priority"] = sev_map[data["avaya_severity"]]
+        if update_vals:
+            ticket.write(update_vals)
+
+        # Post to Chatter
+        body_html = data.get("description") or data.get("message") or data.get("subject") or "Activity or reply received."
+        msg_subject = data.get("subject") or f"Update on {ticket.name}"
+        ticket.message_post(
+            body=Markup(f"<b>[Email Update / Activity Received]</b><br/>{body_html}"),
+            subject=msg_subject,
+            message_type="comment",
+            subtype_xmlid="mail.mt_comment"
+        )
+
+        return request.make_response(
+            json.dumps({
+                "success": True,
+                "id": ticket.id,
+                "ref": ticket.name,
+                "state": ticket.state,
+                "avaya_status": ticket.avaya_status,
+                "portal_url": f"https://phongthep.ddns.net/web#id={ticket.id}&model=helpdesk.ticket.pro&view_type=form"
+            }),
+            headers=[("Content-Type", "application/json"), ("Access-Control-Allow-Origin", "*")]
+        )
+
