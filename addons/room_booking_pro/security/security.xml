@@ -1,0 +1,21 @@
+<odoo>
+    <data>
+        <record id="module_category_room_booking" model="ir.module.category">
+            <field name="name">จองห้องประชุม</field>
+            <field name="parent_id" ref="base.module_category_administration"/>
+            <field name="sequence">100</field>
+        </record>
+
+        <record id="group_room_user" model="res.groups">
+            <field name="name">ผู้ใช้งาน (User)</field>
+            <field name="category_id" ref="module_category_room_booking"/>
+            <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+        </record>
+
+        <record id="group_room_admin" model="res.groups">
+            <field name="name">ผู้อนุมัติ (Admin)</field>
+            <field name="category_id" ref="module_category_room_booking"/>
+            <field name="implied_ids" eval="[(4, ref('group_room_user'))]"/>
+            </record>
+    </data>
+</odoo>

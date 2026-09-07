@@ -1,0 +1,16 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_helpdesk_ticket_pro_admin,helpdesk.ticket.pro.admin,model_helpdesk_ticket_pro,group_helpdesk_ticket_pro_admin,1,1,1,1
+access_helpdesk_ticket_pro_engineer,helpdesk.ticket.pro.engineer,model_helpdesk_ticket_pro,group_helpdesk_ticket_pro_engineer,1,1,1,0
+access_helpdesk_ticket_pro_user,helpdesk.ticket.pro.user,model_helpdesk_ticket_pro,group_helpdesk_ticket_pro_user,1,0,0,0
+access_helpdesk_ticket_pro_portal,helpdesk.ticket.pro.portal,model_helpdesk_ticket_pro,base.group_portal,1,0,0,0
+access_helpdesk_ticket_category_admin,helpdesk.ticket.category.admin,model_helpdesk_ticket_category,group_helpdesk_ticket_pro_admin,1,1,1,1
+access_helpdesk_ticket_category_user,helpdesk.ticket.category.user,model_helpdesk_ticket_category,group_helpdesk_ticket_pro_user,1,0,0,0
+access_helpdesk_ticket_category_portal,helpdesk.ticket.category.portal,model_helpdesk_ticket_category,base.group_portal,1,0,0,0
+access_helpdesk_ticket_category_public,helpdesk.ticket.category.public,model_helpdesk_ticket_category,base.group_public,1,0,0,0
+access_helpdesk_ticket_tag_admin,helpdesk.ticket.tag.admin,model_helpdesk_ticket_tag,group_helpdesk_ticket_pro_admin,1,1,1,1
+access_helpdesk_ticket_tag_engineer,helpdesk.ticket.tag.engineer,model_helpdesk_ticket_tag,group_helpdesk_ticket_pro_engineer,1,1,1,0
+access_helpdesk_ticket_tag_user,helpdesk.ticket.tag.user,model_helpdesk_ticket_tag,group_helpdesk_ticket_pro_user,1,0,0,0
+access_helpdesk_ticket_tag_portal,helpdesk.ticket.tag.portal,model_helpdesk_ticket_tag,base.group_portal,1,0,0,0
+access_helpdesk_ticket_tag_public,helpdesk.ticket.tag.public,model_helpdesk_ticket_tag,base.group_public,1,0,0,0
+access_helpdesk_sla_policy_admin,helpdesk.sla.policy.admin,model_helpdesk_sla_policy,group_helpdesk_ticket_pro_admin,1,1,1,1
+access_helpdesk_sla_policy_user,helpdesk.sla.policy.user,model_helpdesk_sla_policy,group_helpdesk_ticket_pro_user,1,0,0,0

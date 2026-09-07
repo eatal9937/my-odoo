@@ -1,0 +1,30 @@
+# Odoo database files and volume data
+*.sql
+*.dump
+*.bak
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Secrets and credentials
+*.env
+.env*
+odoo.conf
+
+# Logs
+*.log

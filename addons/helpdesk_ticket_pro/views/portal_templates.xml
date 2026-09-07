@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Add Ticket entry in Portal Home -->
+    <template id="portal_my_home_menu_ticket" name="Portal layout : Tickets menu entries" inherit_id="portal.portal_breadcrumbs" priority="20">
+        <xpath expr="//ol[hasclass('o_portal_submenu')]" position="inside">
+            <li t-if="page_name == 'ticket' or ticket" class="breadcrumb-item active">
+                <a t-if="ticket" t-attf-href="/my/tickets?{{ keep_query() }}">Support Tickets</a>
+                <t t-else="">Support Tickets</t>
+            </li>
+            <li t-if="ticket" class="breadcrumb-item active">
+                <t t-out="ticket.name"/>
+            </li>
+        </xpath>
+    </template>
+
+    <template id="portal_my_home_ticket" name="Show Tickets on Portal Home" inherit_id="portal.portal_my_home" priority="20">
+        <xpath expr="//div[hasclass('o_portal_docs')]" position="inside">
+            <t t-call="portal.portal_docs_entry">
+                <t t-set="title">Support Tickets</t>
+                <t t-set="url" t-value="'/my/tickets'"/>
+                <t t-set="placeholder_count" t-value="'ticket_count'"/>
+                <t t-set="icon" t-value="'/helpdesk_ticket_pro/static/src/img/helpdesk.svg'"/>
+                <t t-set="text">Track ticket status, report issues, or query support engineers</t>
+            </t>
+        </xpath>
+    </template>
+
+    <!-- Tickets List View -->
+    <template id="portal_my_tickets" name="My Tickets">
+        <t t-call="portal.portal_layout">
+            <t t-set="breadcrumbs_searchbar" t-value="True"/>
+            
+            <div class="d-flex justify-content-between align-items-center mb-3 mt-2">
+                <h4 class="mb-0 text-secondary">Support Tickets</h4>
+                <a href="/my/ticket/new" class="btn btn-primary d-flex align-items-center gap-1">
+                    <i class="fa fa-plus-circle"/> New Ticket
+                </a>
+            </div>
+            
+            <t t-if="not tickets">
+                <p class="alert alert-warning">You do not have any tickets at the moment.</p>
+            </t>
+            
+            <t t-if="tickets" t-call="portal.portal_table">
+                <thead>
+                    <tr class="active">
+                        <th>Ticket Ref</th>
+                        <th>Subject</th>
+                        <th>Type</th>
+                        <th>Priority</th>
+                        <th>Date Created</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <t t-foreach="tickets" t-as="ticket">
+                        <tr>
+                            <td>
+                                <a t-attf-href="/my/ticket/#{ticket.id}">
+                                    <span t-field="ticket.name"/>
+                                </a>
+                            </td>
+                            <td><span t-field="ticket.subject"/></td>
+                            <td>
+                                <span t-field="ticket.ticket_type"/>
+                            </td>
+                            <td>
+                                <span t-field="ticket.priority"/>
+                            </td>
+                            <td>
+                                <span t-field="ticket.create_date" t-options="{'widget': 'date'}"/>
+                            </td>
+                            <td>
+                                <span class="badge rounded-pill text-bg-info" t-field="ticket.state"/>
+                            </td>
+                        </tr>
+                    </t>
+                </tbody>
+            </t>
+        </t>
+    </template>
+
+    <!-- Ticket Detail View -->
+    <template id="portal_my_ticket_detail" name="My Ticket Detail">
+        <t t-call="portal.portal_layout">
+            <div class="container bg-white pb-5 card shadow-sm mt-3">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h3 class="mb-0 text-primary">
+                            <span t-field="ticket.name"/> : <span t-field="ticket.subject"/>
+                        </h3>
+                        <span class="badge rounded-pill text-bg-warning p-2" t-field="ticket.state"/>
+                    </div>
+                    <hr/>
+                    
+                    <div class="row bg-light p-3 rounded mb-4">
+                        <div class="col-md-6 mb-2">
+                            <strong>Type:</strong> <span t-field="ticket.ticket_type"/><br/>
+                            <strong>Priority:</strong> <span t-field="ticket.priority"/><br/>
+                            <strong>Category:</strong> <span t-field="ticket.category_id.name" t-default="-"/>
+                        </div>
+                        <div class="col-md-6 mb-2">
+                            <strong>Assigned Agent:</strong> <span t-field="ticket.user_id.name" t-default="Unassigned"/><br/>
+                            <strong>SLA Deadline:</strong> <span t-field="ticket.deadline" t-options="{'widget': 'datetime'}" t-default="No Deadline"/>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 mb-4">
+                        <h5 class="text-secondary border-bottom pb-2">Description</h5>
+                        <div t-out="ticket.description" class="p-3 bg-white border rounded" style="min-height: 100px;"/>
+                    </div>
+                </div>
+                
+                <!-- Odoo Chatter message thread on website -->
+                <div class="card-footer bg-white border-top mt-4 pt-4">
+                    <h5 class="mb-4 text-secondary">Communication History &amp; Agent Contact</h5>
+                    <t t-call="portal.message_thread">
+                        <t t-set="object" t-value="ticket"/>
+                        <t t-set="token" t-value="ticket.access_token"/>
+                    </t>
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <!-- Ticket Creation Form -->
+    <template id="portal_create_ticket" name="Create New Ticket">
+        <t t-call="portal.portal_layout">
+            <div class="container bg-white pb-5 card shadow-sm mt-3">
+                <div class="card-body">
+                    <h3 class="mb-4 text-primary border-bottom pb-2">
+                        <i class="fa fa-plus-circle me-2"/>Open a New Ticket
+                    </h3>
+                    
+                    <form action="/my/ticket/create" method="post" enctype="multipart/form-data">
+                        <!-- CSRF Token -->
+                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                        
+                        <div class="row">
+                            <div class="col-md-12 mb-3">
+                                <label for="subject" class="form-label font-weight-bold">Subject <span class="text-danger">*</span></label>
+                                <input type="text" name="subject" id="subject" class="form-control form-control-lg" placeholder="Please describe the issue, e.g., Connection down, system not working..." required="required"/>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label for="ticket_type" class="form-label">Type</label>
+                                <select name="ticket_type" id="ticket_type" class="form-select">
+                                    <option value="question">Question / General Inquiry</option>
+                                    <option value="incident">Incident / System Issue</option>
+                                    <option value="request" selected="selected">Service Request</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="priority" class="form-label">Priority</label>
+                                <select name="priority" id="priority" class="form-select">
+                                    <option value="0">Low</option>
+                                    <option value="1" selected="selected">Medium</option>
+                                    <option value="2">High</option>
+                                    <option value="3">Critical</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="category_id" class="form-label">Category</label>
+                                <select name="category_id" id="category_id" class="form-select">
+                                    <option value="">-- Please select category --</option>
+                                    <t t-foreach="categories" t-as="cat">
+                                        <option t-att-value="cat.id"><span t-field="cat.name"/></option>
+                                    </t>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-12 mb-4">
+                                <label for="description" class="form-label">Description</label>
+                                <textarea name="description" id="description" class="form-control" rows="6" placeholder="Please provide details to expedite troubleshooting, e.g., phone number, IP address, contact name, or a detailed description of the issue..."></textarea>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-end gap-2 border-top pt-3">
+                            <a href="/my/tickets" class="btn btn-secondary px-4">Cancel</a>
+                            <button type="submit" class="btn btn-primary px-5 font-weight-bold">
+                                <i class="fa fa-paper-plane me-1"/> Submit
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </t>
+    </template>
+</odoo>

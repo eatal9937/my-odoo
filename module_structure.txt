@@ -1,0 +1,21 @@
+/home/captain/my-odoo/addons/room_booking_pro/
+├── __init__.py
+├── __manifest__.py
+├── models
+│   ├── booking.py
+│   ├── __init__.py
+│   └── __pycache__
+│       ├── booking.cpython-310.pyc
+│       └── __init__.cpython-310.pyc
+├── __pycache__
+│   └── __init__.cpython-310.pyc
+├── security
+│   ├── ir.model.access.csv
+│   └── security.xml
+├── static
+│   └── description
+│       └── icon.png
+└── views
+    └── booking_views.xml
+
+8 directories, 11 files

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="helpdesk_ticket_pro_dashboard_view" model="ir.ui.view">
+        <field name="name">Helpdesk Dashboard View</field>
+        <field name="model">board.board</field>
+        <field name="arch" type="xml">
+            <form string="Helpdesk Dashboard">
+                <board style="1-1">
+                    <column>
+                        <action name="%(helpdesk_ticket_pro.action_helpdesk_ticket_pro)d" 
+                                string="สัดส่วนสถานะงาน (Pie Chart)" 
+                                view_mode="graph"
+                                context="{'graph_type': 'pie', 'graph_groupbys': ['state']}"/>
+                    </column>
+                    <column>
+                        <action name="%(helpdesk_ticket_pro.action_helpdesk_ticket_pro)d" 
+                                string="สรุปงานแยกตามช่าง (Pivot)" 
+                                view_mode="pivot"
+                                context="{'pivot_row_groupby': ['user_id']}"/>
+                        
+                        <action name="%(helpdesk_ticket_pro.action_helpdesk_ticket_pro)d" 
+                                string="รายการ Ticket ที่กำลังดำเนินการ" 
+                                view_mode="list"
+                                domain="[('state', 'not in', ('solved', 'closed'))]"/>
+                    </column>
+                </board>
+            </form>
+        </field>
+    </record>
+
+    <record id="open_helpdesk_pro_dashboard" model="ir.actions.act_window">
+        <field name="name">สรุปภาพรวม Helpdesk</field>
+        <field name="res_model">board.board</field>
+        <field name="view_mode">form</field>
+        <field name="usage">menu</field>
+        <field name="view_id" ref="helpdesk_ticket_pro_dashboard_view"/>
+    </record>
+
+    <menuitem id="menu_helpdesk_pro_main_dashboard" 
+              name="📊 Dashboard สรุปงาน" 
+              parent="menu_helpdesk_pro_root" 
+              action="open_helpdesk_pro_dashboard" 
+              sequence="1"/>
+</odoo>

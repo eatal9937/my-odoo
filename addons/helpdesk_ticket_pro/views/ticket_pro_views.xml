@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_helpdesk_ticket_pro_form" model="ir.ui.view">
+        <field name="name">helpdesk.ticket.pro.form</field>
+        <field name="model">helpdesk.ticket.pro</field>
+        <field name="arch" type="xml">
+            <form string="Helpdesk Ticket">
+                <header>
+                    <field name="state" widget="statusbar" statusbar_visible="new,in_progress,waiting,solved,closed" options="{'clickable': '1'}"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                        <h2><field name="subject" placeholder="Ticket Subject..."/></h2>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="partner_id" widget="res_partner_many2one"/>
+                            <field name="ticket_type"/>
+                            <field name="category_id"/>
+                            <field name="tag_ids" widget="many2many_tags" options="{'color_field': 'color'}"/>
+                        </group>
+                        <group>
+                            <field name="user_id" widget="many2one_avatar_user"/>
+                            <field name="priority" widget="priority"/>
+                            <field name="deadline"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Description">
+                            <field name="description" placeholder="Add description here..."/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </div>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_helpdesk_ticket_pro_kanban" model="ir.ui.view">
+        <field name="name">helpdesk.ticket.pro.kanban</field>
+        <field name="model">helpdesk.ticket.pro</field>
+        <field name="arch" type="xml">
+            <kanban default_group_by="state" class="o_kanban_small_column">
+                <field name="name"/>
+                <field name="subject"/>
+                <field name="partner_id"/>
+                <field name="priority"/>
+                <field name="user_id"/>
+                <field name="state"/>
+                <field name="tag_ids"/>
+                <templates>
+                    <t t-name="kanban-box">
+                        <div class="oe_kanban_global_click">
+                            <div class="o_kanban_record_top">
+                                <div class="o_kanban_record_headings">
+                                    <strong class="o_kanban_record_title"><field name="name"/> <field name="subject"/></strong>
+                                </div>
+                            </div>
+                            <div class="o_kanban_record_body">
+                                <field name="partner_id"/>
+                                <div><field name="tag_ids" widget="many2many_tags" options="{'color_field': 'color'}"/></div>
+                            </div>
+                            <div class="o_kanban_record_bottom mt-2">
+                                <div class="oe_kanban_bottom_left">
+                                    <field name="priority" widget="priority"/>
+                                </div>
+                                <div class="oe_kanban_bottom_right">
+                                    <field name="user_id" widget="many2one_avatar_user"/>
+                                </div>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <record id="view_helpdesk_ticket_pro_tree" model="ir.ui.view">
+        <field name="name">helpdesk.ticket.pro.tree</field>
+        <field name="model">helpdesk.ticket.pro</field>
+        <field name="arch" type="xml">
+            <tree string="Helpdesk Tickets" default_order="priority desc, create_date desc" decoration-danger="state == 'new'">
+                <field name="name" string="Ticket Ref." readonly="1" decoration-bf="1"/>
+                <field name="subject" string="หัวข้อปัญหา"/>
+                <field name="partner_id" string="ลูกค้า"/>
+                <field name="category_id" optional="show"/>
+                <field name="tag_ids" widget="many2many_tags" options="{'color_field': 'color'}" optional="show"/>
+                <field name="user_id" string="ผู้รับผิดชอบ" widget="many2one_avatar_user"/>
+                <field name="priority" string="ความด่วน" widget="priority" optional="show"/>
+                <field name="deadline" string="วันครบกำหนด" widget="remaining_days" optional="show"/>
+                <field name="state" string="สถานะ" widget="badge" 
+                       decoration-info="state == 'in_progress'" 
+                       decoration-success="state == 'solved'"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_helpdesk_ticket_pro_calendar" model="ir.ui.view">
+        <field name="name">helpdesk.ticket.pro.calendar</field>
+        <field name="model">helpdesk.ticket.pro</field>
+        <field name="arch" type="xml">
+            <calendar string="Helpdesk Tickets" date_start="deadline" color="user_id" quick_create="0">
+                <field name="subject"/>
+                <field name="user_id" avatar_field="avatar_128"/>
+            </calendar>
+        </field>
+    </record>
+
+    <!-- Menu Actions -->
+    <record id="action_helpdesk_ticket_pro" model="ir.actions.act_window">
+        <field name="name">All Tickets</field>
+        <field name="res_model">helpdesk.ticket.pro</field>
+        <field name="view_mode">kanban,list,form,graph,pivot,calendar</field>
+        <field name="domain">[('state', '!=', 'closed')]</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">สร้าง Ticket แรกของคุณ!</p>
+        </field>
+    </record>
+
+    <record id="action_helpdesk_pro_reporting_only" model="ir.actions.act_window">
+        <field name="name">Ticket Reporting</field>
+        <field name="res_model">helpdesk.ticket.pro</field>
+        <field name="view_mode">list,form</field> 
+    </record>
+
+    <!-- Configuration Actions -->
+    <record id="action_helpdesk_ticket_category" model="ir.actions.act_window">
+        <field name="name">Ticket Categories</field>
+        <field name="res_model">helpdesk.ticket.category</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+    <record id="action_helpdesk_ticket_tag" model="ir.actions.act_window">
+        <field name="name">Ticket Tags</field>
+        <field name="res_model">helpdesk.ticket.tag</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+    <record id="action_helpdesk_sla_policy" model="ir.actions.act_window">
+        <field name="name">SLA Policies</field>
+        <field name="res_model">helpdesk.sla.policy</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+    <!-- Menus -->
+    <menuitem id="menu_helpdesk_pro_root" name="Helpdesk (Pro)" sequence="11"/>
+    <menuitem id="menu_helpdesk_pro_ticket" name="All Tickets" parent="menu_helpdesk_pro_root" action="action_helpdesk_ticket_pro" sequence="10"/>
+    <menuitem id="menu_helpdesk_pro_dashboard_report" name="Reporting" parent="menu_helpdesk_pro_root" action="action_helpdesk_pro_reporting_only" sequence="20"/>
+    
+    <!-- Configuration Menu (Admin Only) -->
+    <menuitem id="menu_helpdesk_pro_config" name="Configuration" parent="menu_helpdesk_pro_root" groups="helpdesk_ticket_pro.group_helpdesk_ticket_pro_admin" sequence="100"/>
+    <menuitem id="menu_helpdesk_pro_config_category" name="Categories" parent="menu_helpdesk_pro_config" action="action_helpdesk_ticket_category" sequence="10"/>
+    <menuitem id="menu_helpdesk_pro_config_tag" name="Tags" parent="menu_helpdesk_pro_config" action="action_helpdesk_ticket_tag" sequence="20"/>
+    <menuitem id="menu_helpdesk_pro_config_sla" name="SLA Policies" parent="menu_helpdesk_pro_config" action="action_helpdesk_sla_policy" sequence="30"/>
+</odoo>

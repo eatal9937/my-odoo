@@ -1,0 +1,100 @@
+<odoo>
+    <record id="view_room_booking_form" model="ir.ui.view">
+        <field name="name">room.booking.pro.form</field>
+        <field name="model">room.booking.pro</field>
+        <field name="arch" type="xml">
+            <form string="จองห้องประชุม">
+                <header>
+                    <button name="action_confirm" string="อนุมัติการจอง" type="object" 
+                            class="oe_highlight" 
+                            invisible="state != 'draft'" 
+                            groups="room_booking_pro.group_room_admin"/>
+                    
+                    <button name="action_cancel" string="ไม่อนุมัติ" type="object" 
+                            invisible="state != 'draft'" 
+                            groups="room_booking_pro.group_room_admin"/>
+                    
+                    <button name="action_draft" string="กลับไปรอยืนยันใหม่" type="object" 
+                            invisible="state == 'draft'"/>
+                    
+                    <field name="state" widget="statusbar" statusbar_visible="draft,confirmed"/>
+                </header>
+                
+                <sheet>
+                    <widget name="web_ribbon" title="อนุมัติแล้ว" bg_color="text-bg-success" invisible="state != 'confirmed'"/>
+                    <widget name="web_ribbon" title="ไม่อนุมัติ" bg_color="text-bg-danger" invisible="state != 'cancelled'"/>    
+                    
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" placeholder="เช่น ประชุมสรุปยอดประจำเดือน..."/>
+                        </h1>
+                    </div>
+                    
+                    <group>
+                        <group>
+                            <field name="room_name"/>
+                            <field name="user_id" widget="many2one_avatar_user"/>
+                        </group>
+                        <group>
+                            <field name="start_datetime"/>
+                            <field name="end_datetime"/>
+                        </group>
+                    </group>
+                    
+                    <group string="ความต้องการพิเศษ">
+                        <field name="need_projector"/>
+                        <field name="need_snack"/>
+                        <field name="note" placeholder="โน้ตถึงแม่บ้าน หรือฝ่าย IT..."/>
+                    </group>
+                </sheet>
+                
+                <div class="oe_chatter">
+                    <field name="message_follower_ids" widget="mail_followers"/>
+                    <field name="activity_ids" widget="mail_activity"/>
+                    <field name="message_ids" widget="mail_thread"/>
+                </div>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_room_booking_tree" model="ir.ui.view">
+        <field name="name">room.booking.pro.tree</field>
+        <field name="model">room.booking.pro</field>
+        <field name="arch" type="xml">
+            <tree string="รายการจองห้องทั้งหมด" default_order="start_datetime desc">
+                <field name="start_datetime"/>
+                <field name="end_datetime"/>
+                <field name="room_name"/>
+                <field name="name"/>
+                <field name="user_id" widget="many2one_avatar_user"/>
+                
+                <field name="state" widget="badge" 
+                       decoration-success="state == 'confirmed'" 
+                       decoration-danger="state == 'cancelled'" 
+                       decoration-info="state == 'draft'"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_room_booking_calendar" model="ir.ui.view">
+        <field name="name">room.booking.pro.calendar</field>
+        <field name="model">room.booking.pro</field>
+        <field name="arch" type="xml">
+            <calendar string="ตารางห้องประชุม" date_start="start_datetime" date_stop="end_datetime" color="color" event_open_popup="true" hide_time="true">
+                <field name="name"/>
+                <field name="user_id" avatar_field="avatar_128"/>
+                <field name="room_name"/>
+                <field name="state"/>
+            </calendar>
+        </field>
+    </record>
+
+    <record id="action_room_booking_pro" model="ir.actions.act_window">
+        <field name="name">จองห้องประชุม</field>
+        <field name="res_model">room.booking.pro</field>
+        <field name="view_mode">calendar,list,form</field>
+    </record>
+
+    <menuitem id="menu_room_booking_root" name="Room Booking" sequence="20"/>
+    <menuitem id="menu_room_booking_main" name="ตารางจองห้อง" parent="menu_room_booking_root" action="action_room_booking_pro" sequence="10"/>
+</odoo>

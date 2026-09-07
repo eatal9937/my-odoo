@@ -1,0 +1,27 @@
+version: '3.1'
+services:
+  web:
+    image: odoo:17.0
+    restart: unless-stopped
+    command: odoo --addons-path=/usr/lib/python3/dist-packages/odoo/addons,/mnt/extra-addons --proxy-mode
+    depends_on:
+      - db
+    ports:
+      - "8069:8069" # Bind to localhost only because Nginx will proxy to it securely
+    volumes:
+      - odoo-web-data:/var/lib/odoo
+      - ./config:/etc/odoo
+      - ./addons:/mnt/extra-addons
+  db:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_PASSWORD=odoo
+      - POSTGRES_USER=odoo
+    volumes:
+      - odoo-db-data:/var/lib/postgresql/data
+
+volumes:
+  odoo-web-data:
+  odoo-db-data:

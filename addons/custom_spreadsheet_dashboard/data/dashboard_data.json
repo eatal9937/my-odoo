@@ -1,0 +1,138 @@
+{
+  "version": 12,
+  "sheets": [
+    {
+      "id": "sheet1",
+      "name": "Helpdesk Dashboard",
+      "colNumber": 10,
+      "rowNumber": 30,
+      "rows": {
+        "0": { "size": 50 },
+        "2": { "size": 35 },
+        "3": { "size": 28 },
+        "4": { "size": 24 },
+        "5": { "size": 24 },
+        "6": { "size": 24 },
+        "7": { "size": 24 },
+        "8": { "size": 24 },
+        "9": { "size": 26 }
+      },
+      "cols": {
+        "0": { "size": 220 },
+        "1": { "size": 100 },
+        "2": { "size": 40 },
+        "3": { "size": 240 },
+        "4": { "size": 100 },
+        "5": { "size": 40 },
+        "6": { "size": 160 },
+        "7": { "size": 100 }
+      },
+      "merges": [],
+      "cells": {
+        "A1": { "content": "Helpdesk Status Overview", "style": 1 },
+        
+        "A3": { "content": "Tickets by Stage", "style": 2 },
+        "A4": { "content": "Stage", "style": 3, "border": 1 },
+        "B4": { "content": "Count", "style": 3, "border": 1 },
+        "A5": { "content": "New", "style": 4 },
+        "B5": { "content": "=ODOO.PIVOT(\"1\",\"__count\",\"state\",\"new\")", "style": 5 },
+        "A6": { "content": "In Progress", "style": 4 },
+        "B6": { "content": "=ODOO.PIVOT(\"1\",\"__count\",\"state\",\"in_progress\")", "style": 5 },
+        "A7": { "content": "Waiting for Customer", "style": 4 },
+        "B7": { "content": "=ODOO.PIVOT(\"1\",\"__count\",\"state\",\"waiting\")", "style": 5 },
+        "A8": { "content": "Solved", "style": 4 },
+        "B8": { "content": "=ODOO.PIVOT(\"1\",\"__count\",\"state\",\"solved\")", "style": 5 },
+        "A9": { "content": "Closed", "style": 4 },
+        "B9": { "content": "=ODOO.PIVOT(\"1\",\"__count\",\"state\",\"closed\")", "style": 5 },
+        "A10": { "content": "Total Tickets", "style": 6, "border": 2 },
+        "B10": { "content": "=SUM(B5:B9)", "style": 7, "border": 2 },
+
+        "D3": { "content": "Tickets by Assignee", "style": 2 },
+        "D4": { "content": "Assignee", "style": 3, "border": 1 },
+        "E4": { "content": "Count", "style": 3, "border": 1 },
+        "D5": { "content": "=ODOO.PIVOT.HEADER(\"2\",\"#user_id\",1)", "style": 4 },
+        "E5": { "content": "=ODOO.PIVOT(\"2\",\"__count\",\"#user_id\",1)", "style": 5 },
+        "D6": { "content": "=ODOO.PIVOT.HEADER(\"2\",\"#user_id\",2)", "style": 4 },
+        "E6": { "content": "=ODOO.PIVOT(\"2\",\"__count\",\"#user_id\",2)", "style": 5 },
+        "D7": { "content": "=ODOO.PIVOT.HEADER(\"2\",\"#user_id\",3)", "style": 4 },
+        "E7": { "content": "=ODOO.PIVOT(\"2\",\"__count\",\"#user_id\",3)", "style": 5 },
+        "D8": { "content": "=ODOO.PIVOT.HEADER(\"2\",\"#user_id\",4)", "style": 4 },
+        "E8": { "content": "=ODOO.PIVOT(\"2\",\"__count\",\"#user_id\",4)", "style": 5 },
+        "D9": { "content": "=ODOO.PIVOT.HEADER(\"2\",\"#user_id\",5)", "style": 4 },
+        "E9": { "content": "=ODOO.PIVOT(\"2\",\"__count\",\"#user_id\",5)", "style": 5 },
+        "D10": { "content": "Total Tickets", "style": 6, "border": 2 },
+        "E10": { "content": "=SUM(E5:E9)", "style": 7, "border": 2 },
+
+        "G3": { "content": "Tickets by Priority", "style": 2 },
+        "G4": { "content": "Priority", "style": 3, "border": 1 },
+        "H4": { "content": "Count", "style": 3, "border": 1 },
+        "G5": { "content": "Low", "style": 4 },
+        "H5": { "content": "=ODOO.PIVOT(\"3\",\"__count\",\"priority\",\"0\")", "style": 5 },
+        "G6": { "content": "Medium", "style": 4 },
+        "H6": { "content": "=ODOO.PIVOT(\"3\",\"__count\",\"priority\",\"1\")", "style": 5 },
+        "G7": { "content": "High", "style": 4 },
+        "H7": { "content": "=ODOO.PIVOT(\"3\",\"__count\",\"priority\",\"2\")", "style": 5 },
+        "G8": { "content": "Urgent", "style": 4 },
+        "H8": { "content": "=ODOO.PIVOT(\"3\",\"__count\",\"priority\",\"3\")", "style": 5 },
+        "G9": { "content": "Total Tickets", "style": 6, "border": 2 },
+        "H9": { "content": "=SUM(H5:H8)", "style": 7, "border": 2 }
+      },
+      "conditionalFormats": [],
+      "figures": [],
+      "areGridLinesVisible": true,
+      "isVisible": true
+    }
+  ],
+  "styles": {
+    "1": { "bold": true, "fontSize": 20, "textColor": "#714B67" },
+    "2": { "bold": true, "fontSize": 14, "textColor": "#01666b" },
+    "3": { "bold": true, "fontSize": 12, "fillColor": "#f8f9fa", "textColor": "#495057" },
+    "4": { "fontSize": 12 },
+    "5": { "fontSize": 12, "align": "right" },
+    "6": { "bold": true, "fontSize": 12, "fillColor": "#e9ecef", "textColor": "#212529" },
+    "7": { "bold": true, "fontSize": 12, "align": "right", "fillColor": "#e9ecef", "textColor": "#212529" }
+  },
+  "borders": {
+    "1": {
+      "bottom": ["thin", "#cccccc"]
+    },
+    "2": {
+      "top": ["thin", "#cccccc"],
+      "bottom": ["thin", "#cccccc"]
+    }
+  },
+  "pivots": {
+    "1": {
+      "model": "helpdesk.ticket.pro",
+      "rowGroupBys": ["state"],
+      "colGroupBys": [],
+      "measures": [{"field": "__count"}],
+      "domain": [],
+      "context": {},
+      "id": "1",
+      "name": "Tickets by Stage"
+    },
+    "2": {
+      "model": "helpdesk.ticket.pro",
+      "rowGroupBys": ["user_id"],
+      "colGroupBys": [],
+      "measures": [{"field": "__count"}],
+      "domain": [],
+      "context": {},
+      "id": "2",
+      "name": "Tickets by Assignee"
+    },
+    "3": {
+      "model": "helpdesk.ticket.pro",
+      "rowGroupBys": ["priority"],
+      "colGroupBys": [],
+      "measures": [{"field": "__count"}],
+      "domain": [],
+      "context": {},
+      "id": "3",
+      "name": "Tickets by Priority"
+    }
+  },
+  "pivotNextId": 4,
+  "odooVersion": 4
+}

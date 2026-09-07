@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-50 text-slate-900">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Helpdesk Ticketing Dashboard</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        outfit: ['Outfit', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: radial-gradient(circle at top right, rgba(230, 239, 250, 0.8), rgba(248, 250, 252, 1)),
+                        radial-gradient(circle at bottom left, rgba(224, 231, 255, 0.5), rgba(248, 250, 252, 1));
+        }
+        .glow-amber {
+            box-shadow: 0 4px 20px rgba(245, 158, 11, 0.08);
+            border-color: rgba(245, 158, 11, 0.35);
+        }
+        .glow-cyan {
+            box-shadow: 0 4px 20px rgba(6, 182, 212, 0.08);
+            border-color: rgba(6, 182, 212, 0.35);
+        }
+        .glow-rose {
+            box-shadow: 0 4px 25px rgba(244, 63, 94, 0.15);
+            border-color: rgba(244, 63, 94, 0.45);
+        }
+        .glow-emerald {
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.08);
+            border-color: rgba(16, 185, 129, 0.35);
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.98); opacity: 0.8; }
+            50% { transform: scale(1.02); opacity: 1; }
+            100% { transform: scale(0.98); opacity: 0.8; }
+        }
+        .animate-pulse-ring {
+            animation: pulse-ring 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col justify-between p-6 md:p-8 overflow-hidden select-none">
+
+    <!-- Header Section -->
+    <header class="flex flex-col sm:flex-row justify-between items-center gap-4 border-b border-slate-200 pb-4 z-10">
+        <div class="flex items-center gap-4">
+            <div class="p-3 bg-indigo-50 border border-indigo-100 rounded-2xl">
+                <i class="fa-solid fa-headset text-indigo-600 text-3xl"></i>
+            </div>
+            <div>
+                <h1 class="font-outfit font-extrabold text-2xl md:text-3xl tracking-wide text-slate-800">HELPDESK OPERATIONS BOARD</h1>
+                <p class="text-slate-400 text-xs md:text-sm font-medium uppercase mt-0.5 tracking-widest">Live System Statistics</p>
+            </div>
+        </div>
+        
+        <!-- Time and Date -->
+        <div class="text-center sm:text-right flex flex-col items-center sm:items-end">
+            <div id="digitalClock" class="font-outfit font-bold text-3xl md:text-4xl text-slate-800 tracking-wider">00:00:00</div>
+            <div id="calendarDate" class="text-slate-500 font-medium text-xs md:text-sm mt-1">Friday, 24 July 2026</div>
+        </div>
+    </header>
+
+    <!-- Top Row: KPI Statistics Grid -->
+    <section class="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 my-6 z-10">
+        <!-- New / Unassigned Card -->
+        <div class="bg-white/80 backdrop-blur-md border border-slate-200 rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 hover:scale-[1.02] glow-amber shadow-sm">
+            <div class="flex justify-between items-center">
+                <span class="text-xs font-semibold tracking-wider text-amber-600 uppercase">New / Incoming</span>
+                <i class="fa-solid fa-envelope-open-text text-amber-500 text-xl"></i>
+            </div>
+            <div class="mt-4">
+                <h2 id="kpiNew" class="font-outfit font-bold text-4xl md:text-5xl text-slate-800">0</h2>
+                <p class="text-slate-400 text-xs mt-1">Pending assignment</p>
+            </div>
+        </div>
+
+        <!-- In Progress Card -->
+        <div class="bg-white/80 backdrop-blur-md border border-slate-200 rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 hover:scale-[1.02] glow-cyan shadow-sm">
+            <div class="flex justify-between items-center">
+                <span class="text-xs font-semibold tracking-wider text-cyan-600 uppercase">In Progress</span>
+                <i class="fa-solid fa-spinner text-cyan-500 text-xl animate-spin" style="animation-duration: 6s"></i>
+            </div>
+            <div class="mt-4">
+                <h2 id="kpiInProgress" class="font-outfit font-bold text-4xl md:text-5xl text-slate-800">0</h2>
+                <p class="text-slate-400 text-xs mt-1">Active troubleshooting</p>
+            </div>
+        </div>
+
+        <!-- Urgent Priority Card -->
+        <div class="bg-white/80 backdrop-blur-md border border-rose-100 rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 hover:scale-[1.02] glow-rose shadow-sm animate-pulse-ring">
+            <div class="flex justify-between items-center">
+                <span class="text-xs font-semibold tracking-wider text-rose-600 uppercase">Urgent Active</span>
+                <i class="fa-solid fa-triangle-exclamation text-rose-500 text-xl animate-bounce"></i>
+            </div>
+            <div class="mt-4">
+                <h2 id="kpiUrgent" class="font-outfit font-bold text-4xl md:text-5xl text-slate-800">0</h2>
+                <p class="text-rose-500/80 text-xs mt-1">Immediate action needed</p>
+            </div>
+        </div>
+
+        <!-- Resolved Today Card -->
+        <div class="bg-white/80 backdrop-blur-md border border-slate-200 rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 hover:scale-[1.02] glow-emerald shadow-sm">
+            <div class="flex justify-between items-center">
+                <span class="text-xs font-semibold tracking-wider text-emerald-600 uppercase">Resolved Today</span>
+                <i class="fa-solid fa-circle-check text-emerald-500 text-xl"></i>
+            </div>
+            <div class="mt-4">
+                <h2 id="kpiResolved" class="font-outfit font-bold text-4xl md:text-5xl text-slate-800">0</h2>
+                <p class="text-slate-400 text-xs mt-1">Tickets solved within 24h</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Lower Section: Ticket Queue and Workload -->
+    <section class="flex-grow grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch overflow-hidden z-10">
+        
+        <!-- Left Panel: Live Ticket Queue -->
+        <div class="lg:col-span-2 bg-white/60 backdrop-blur-md border border-slate-200/85 rounded-3xl p-6 flex flex-col overflow-hidden shadow-sm">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-outfit font-bold text-xl text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-list-check text-indigo-600"></i>
+                    Live Incident Queue
+                </h3>
+                <span class="text-xs text-slate-500 px-3 py-1 bg-slate-100 border border-slate-200 rounded-full" id="queueCount">0 Active Tickets</span>
+            </div>
+
+            <!-- Scrollable Queue List -->
+            <div id="ticketQueue" class="flex-grow overflow-y-auto pr-2 space-y-3.5">
+                <!-- Dynamically populated cards -->
+            </div>
+        </div>
+
+        <!-- Right Panel: Agent Workload Board -->
+        <div class="bg-white/60 backdrop-blur-md border border-slate-200/85 rounded-3xl p-6 flex flex-col justify-between overflow-hidden shadow-sm">
+            <div class="flex flex-col h-full overflow-hidden">
+                <h3 class="font-outfit font-bold text-xl text-slate-800 mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-users-gear text-indigo-600"></i>
+                    Agent Allocation
+                </h3>
+                
+                <!-- Workload List -->
+                <div id="workloadList" class="flex-grow overflow-y-auto pr-2 space-y-5">
+                    <!-- Progress bars of active tickets per agent -->
+                </div>
+            </div>
+
+            <div class="border-t border-slate-100 pt-4 mt-4 flex justify-between items-center text-xs text-slate-400">
+                <span class="flex items-center gap-1.5 font-medium">
+                    <i class="fa-solid fa-circle-notch animate-spin text-indigo-500 text-[10px]"></i>
+                    System Auto-Polling
+                </span>
+                <span>Updates every 15s</span>
+            </div>
+        </div>
+
+    </section>
+
+    <!-- Footer Area -->
+    <footer class="flex justify-between items-center text-xs text-slate-400 border-t border-slate-200 pt-4 mt-6 z-10">
+        <div>Odoo Helpdesk Pro Suite</div>
+        <div>&copy; 2026 Jadscomm. All rights reserved.</div>
+    </footer>
+
+    <!-- Script Logic -->
+    <script>
+        const clockEl = document.getElementById('digitalClock');
+        const dateEl = document.getElementById('calendarDate');
+        
+        // KPI elements
+        const kpiNew = document.getElementById('kpiNew');
+        const kpiInProgress = document.getElementById('kpiInProgress');
+        const kpiUrgent = document.getElementById('kpiUrgent');
+        const kpiResolved = document.getElementById('kpiResolved');
+        
+        // Lists
+        const ticketQueue = document.getElementById('ticketQueue');
+        const queueCount = document.getElementById('queueCount');
+        const workloadList = document.getElementById('workloadList');
+
+        // Clock Update
+        function updateClock() {
+            const now = new Date();
+            clockEl.textContent = now.toLocaleTimeString('en-US', { hour12: false });
+            
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            dateEl.textContent = now.toLocaleDateString('en-US', options);
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Time Difference human-readable format
+        function timeAgo(dateString) {
+            if (!dateString) return 'Just now';
+            const past = new Date(dateString);
+            const now = new Date();
+            const diffMs = now - past;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMins / 60);
+
+            if (diffMins < 1) return 'Just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            if (diffHours < 24) return `${diffHours}h ago`;
+            return past.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }
+
+        // Fetch Live Data
+        async function fetchDashboardData() {
+            try {
+                const response = await fetch('/helpdesk/api/dashboard_data');
+                if (!response.ok) throw new Error('Response error');
+                const data = await response.json();
+                renderUI(data);
+            } catch (error) {
+                console.error("Error loading dashboard data:", error);
+            }
+        }
+
+        // Render UI Elements
+        function renderUI(data) {
+            // Update KPIs
+            kpiNew.textContent = data.kpis.new;
+            kpiInProgress.textContent = data.kpis.in_progress;
+            kpiUrgent.textContent = data.kpis.urgent;
+            kpiResolved.textContent = data.kpis.solved_today;
+            
+            const activeCount = data.tickets.length;
+            queueCount.textContent = `${activeCount} Active Ticket${activeCount !== 1 ? 's' : ''}`;
+
+            // Render Incident Queue
+            ticketQueue.innerHTML = '';
+            if (data.tickets.length === 0) {
+                ticketQueue.innerHTML = `
+                    <div class="h-full flex flex-col justify-center items-center p-12 border border-dashed border-slate-200 rounded-2xl bg-white/40">
+                        <i class="fa-solid fa-square-check text-slate-300 text-5xl mb-3"></i>
+                        <p class="text-slate-600 font-semibold text-lg">Inbox Clean</p>
+                        <p class="text-slate-400 text-sm mt-1">No active support incidents at the moment.</p>
+                    </div>
+                `;
+            } else {
+                data.tickets.forEach(ticket => {
+                    // Priority rendering
+                    let priorityStars = '';
+                    const pVal = parseInt(ticket.priority);
+                    for (let i = 1; i <= 3; i++) {
+                        if (i <= pVal) {
+                            priorityStars += '<i class="fa-solid fa-star text-amber-400 text-xs mr-0.5"></i>';
+                        } else {
+                            priorityStars += '<i class="fa-solid fa-star text-slate-200 text-xs mr-0.5"></i>';
+                        }
+                    }
+                    
+                    // State tag styles
+                    let stateClass = '';
+                    let stateLabel = '';
+                    if (ticket.state === 'new') {
+                        stateClass = 'bg-amber-50 text-amber-700 border-amber-200';
+                        stateLabel = 'New';
+                    } else if (ticket.state === 'in_progress') {
+                        stateClass = 'bg-cyan-50 text-cyan-700 border-cyan-200';
+                        stateLabel = 'Work';
+                    } else if (ticket.state === 'waiting') {
+                        stateClass = 'bg-indigo-50 text-indigo-700 border-indigo-200';
+                        stateLabel = 'Wait';
+                    }
+
+                    // SLA Deadline rendering
+                    let deadlineHtml = '';
+                    if (ticket.deadline) {
+                        const dl = new Date(ticket.deadline);
+                        const isOverdue = dl < new Date();
+                        const colorClass = isOverdue ? 'text-rose-500 font-bold' : 'text-slate-400';
+                        const timeStr = dl.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+                        deadlineHtml = `
+                            <span class="flex items-center gap-1 text-[11px] ${colorClass}">
+                                <i class="fa-solid fa-clock-rotate-left"></i>
+                                SLA: ${timeStr}
+                            </span>
+                        `;
+                    }
+
+                    const card = document.createElement('div');
+                    card.className = `p-4 bg-white border border-slate-200/80 rounded-2xl shadow-sm hover:border-indigo-200 hover:bg-slate-50/40 transition-all duration-300 flex flex-col md:flex-row justify-between items-start md:items-center gap-4`;
+                    card.innerHTML = `
+                        <div class="flex items-start gap-3.5 flex-grow overflow-hidden">
+                            <div class="flex flex-col items-center justify-center p-2.5 bg-slate-50 border border-slate-200 rounded-xl min-w-[75px] text-center">
+                                <span class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Ref</span>
+                                <span class="text-xs font-bold text-indigo-600 uppercase tracking-wide mt-0.5">${ticket.ref}</span>
+                            </div>
+                            <div class="flex-grow overflow-hidden">
+                                <div class="flex items-center gap-2">
+                                    <h4 class="font-semibold text-slate-700 text-sm md:text-base truncate" title="${ticket.subject}">${ticket.subject}</h4>
+                                    <span class="text-[10px] font-bold px-2.5 py-0.5 border rounded-full ${stateClass}">${stateLabel}</span>
+                                </div>
+                                <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2 text-xs text-slate-500">
+                                    <span><i class="fa-regular fa-folder-open text-slate-400 mr-1"></i>${ticket.category}</span>
+                                    <span><i class="fa-regular fa-user text-slate-400 mr-1"></i>${ticket.customer}</span>
+                                    <span class="text-slate-400"><i class="fa-regular fa-clock mr-1"></i>${timeAgo(ticket.create_date)}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex md:flex-col justify-between items-end gap-2 w-full md:w-auto border-t md:border-t-0 border-slate-100 pt-2 md:pt-0">
+                            <div class="flex items-center gap-1">
+                                ${priorityStars}
+                            </div>
+                            <div class="text-xs text-slate-600 flex items-center gap-1.5">
+                                <i class="fa-solid fa-user-check text-slate-400 text-[10px]"></i>
+                                ${ticket.assigned_to}
+                            </div>
+                            ${deadlineHtml}
+                        </div>
+                    `;
+                    ticketQueue.appendChild(card);
+                });
+            }
+
+            // Render Agent Allocation
+            workloadList.innerHTML = '';
+            if (data.agent_workload.length === 0) {
+                workloadList.innerHTML = `
+                    <div class="text-center p-6 border border-dashed border-slate-200 rounded-2xl bg-white/40">
+                        <i class="fa-solid fa-users-slash text-slate-300 text-3xl mb-2"></i>
+                        <p class="text-xs text-slate-500">No agents currently assigned</p>
+                    </div>
+                `;
+            } else {
+                // Find max tickets for scaling progress bar width (at least 5 as basis)
+                const maxTickets = Math.max(5, ...data.agent_workload.map(a => a.active_tickets));
+
+                data.agent_workload.forEach(agent => {
+                    const pct = Math.min(100, (agent.active_tickets / maxTickets) * 100);
+                    
+                    // Choose bar color depending on ticket load
+                    let barColor = 'from-indigo-500 to-indigo-600';
+                    if (agent.active_tickets >= 8) {
+                        barColor = 'from-rose-500 to-rose-600';
+                    } else if (agent.active_tickets >= 5) {
+                        barColor = 'from-amber-500 to-amber-600';
+                    }
+
+                    const div = document.createElement('div');
+                    div.className = 'flex flex-col gap-2 p-3 bg-slate-50 border border-slate-100 rounded-2xl';
+                    div.innerHTML = `
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="font-semibold text-slate-600 flex items-center gap-2">
+                                <i class="fa-solid fa-circle-user text-slate-400 text-base"></i>
+                                ${agent.agent_name}
+                            </span>
+                            <span class="font-bold text-slate-600 bg-white px-2.5 py-0.5 rounded-lg border border-slate-200 text-xs">${agent.active_tickets} Ticket${agent.active_tickets !== 1 ? 's' : ''}</span>
+                        </div>
+                        <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200/50 animate-pulse-slow">
+                            <div class="h-full bg-gradient-to-r ${barColor} rounded-full transition-all duration-1000" style="width: ${pct}%"></div>
+                        </div>
+                    `;
+                    workloadList.appendChild(div);
+                });
+            }
+        }
+
+        // Init
+        fetchDashboardData();
+        setInterval(fetchDashboardData, 15000); // 15s refresh
+    </script>
+</body>
+</html>

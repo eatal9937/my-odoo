@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meeting Room Display</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        outfit: ['Outfit', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: radial-gradient(circle at top right, rgba(30, 41, 59, 0.4), rgba(2, 6, 23, 1)),
+                        radial-gradient(circle at bottom left, rgba(15, 23, 42, 0.5), rgba(2, 6, 23, 1));
+        }
+        .glow-green {
+            box-shadow: 0 0 30px rgba(16, 185, 129, 0.2);
+            border-color: rgba(16, 185, 129, 0.4);
+        }
+        .glow-red {
+            box-shadow: 0 0 30px rgba(239, 68, 68, 0.25);
+            border-color: rgba(239, 68, 68, 0.4);
+        }
+        /* Custom animations */
+        @keyframes pulse-slow {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.05); }
+        }
+        .animate-pulse-slow {
+            animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col justify-between p-6 md:p-10 overflow-hidden select-none">
+
+    <!-- Top Navigation Bar -->
+    <header class="flex justify-between items-center z-10">
+        <!-- Room Selector -->
+        <div class="flex items-center gap-4">
+            <div class="p-3 bg-slate-900/80 border border-slate-800 rounded-xl flex items-center gap-3">
+                <i class="fa-solid fa-door-open text-indigo-400 text-lg"></i>
+                <select id="roomSelector" class="bg-transparent text-slate-100 font-outfit font-semibold text-lg focus:outline-none cursor-pointer pr-4">
+                    <option value="room_a" class="bg-slate-900">Meeting Room A (Small, 4-6 pax)</option>
+                    <option value="room_b" class="bg-slate-900">Meeting Room B (Large, 10-15 pax)</option>
+                    <option value="board" class="bg-slate-900">Boardroom</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Real-time Clock & Date -->
+        <div class="text-right flex flex-col items-end">
+            <div id="digitalClock" class="font-outfit font-bold text-4xl md:text-5xl text-slate-100 tracking-wider">00:00:00</div>
+            <div id="calendarDate" class="text-slate-400 font-medium text-sm md:text-base mt-1">Thursday, 23 July 2026</div>
+        </div>
+    </header>
+
+    <!-- Main Section (Status Display) -->
+    <main class="my-auto grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-10 items-stretch z-10">
+        
+        <!-- Left 2 Columns: Active Meeting Status -->
+        <div id="statusCard" class="lg:col-span-2 backdrop-blur-md bg-slate-900/40 border border-slate-800 rounded-3xl p-8 flex flex-col justify-between transition-all duration-500 min-h-[400px]">
+            <!-- Status Badge -->
+            <div class="flex justify-between items-start">
+                <div class="flex items-center gap-3">
+                    <span id="statusIndicator" class="h-4 w-4 rounded-full bg-emerald-500 animate-ping"></span>
+                    <span id="statusText" class="font-outfit font-bold text-2xl tracking-wide text-emerald-400">AVAILABLE</span>
+                </div>
+                <div class="p-3 bg-slate-800/50 rounded-2xl">
+                    <i id="statusIcon" class="fa-solid fa-calendar-check text-emerald-400 text-2xl"></i>
+                </div>
+            </div>
+
+            <!-- Status Details -->
+            <div class="my-8">
+                <h1 id="meetingTitle" class="font-outfit font-extrabold text-4xl md:text-6xl text-slate-100 leading-tight">Vacant</h1>
+                <p id="meetingBooker" class="text-slate-400 text-lg md:text-xl mt-4">No active meetings</p>
+            </div>
+
+            <!-- Bottom Information: Duration & Progress -->
+            <div class="w-full">
+                <!-- Duration Info -->
+                <div class="flex justify-between text-sm font-semibold tracking-wider text-slate-400 mb-3">
+                    <span id="timeStart">--:--</span>
+                    <span id="timeEnd">--:--</span>
+                </div>
+                <!-- Progress Bar Container -->
+                <div id="progressBarContainer" class="w-full h-3 bg-slate-800 rounded-full overflow-hidden hidden">
+                    <div id="progressBar" class="h-full bg-gradient-to-r from-red-500 to-rose-600 rounded-full transition-all duration-1000" style="width: 0%"></div>
+                </div>
+                <!-- Time remaining -->
+                <div id="timeRemaining" class="text-right text-xs font-semibold text-slate-500 mt-2"></div>
+            </div>
+        </div>
+
+        <!-- Right 1 Column: Schedule List -->
+        <div class="backdrop-blur-md bg-slate-900/30 border border-slate-850 rounded-3xl p-6 flex flex-col justify-between">
+            <div>
+                <h3 class="font-outfit font-bold text-xl text-slate-200 mb-4 flex items-center gap-2">
+                    <i class="fa-regular fa-clock text-indigo-400"></i>
+                    Upcoming Meetings Today
+                </h3>
+                <div id="upcomingList" class="space-y-4 max-h-[300px] overflow-y-auto pr-2">
+                    <!-- List items will be injected here -->
+                </div>
+            </div>
+
+            <div class="border-t border-slate-850 pt-4 mt-4 text-center">
+                <span class="text-xs text-slate-500">Auto-updates every 15 seconds</span>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer / Branding -->
+    <footer class="flex justify-between items-center text-xs text-slate-500 border-t border-slate-900 pt-4 z-10">
+        <div>Odoo Room Booking System</div>
+        <div>&copy; 2026 Jadscomm. All rights reserved.</div>
+    </footer>
+
+    <!-- Script logic -->
+    <script>
+        const roomSelector = document.getElementById('roomSelector');
+        const clockEl = document.getElementById('digitalClock');
+        const dateEl = document.getElementById('calendarDate');
+        
+        // Element bindings
+        const statusCard = document.getElementById('statusCard');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const statusText = document.getElementById('statusText');
+        const statusIcon = document.getElementById('statusIcon');
+        const meetingTitle = document.getElementById('meetingTitle');
+        const meetingBooker = document.getElementById('meetingBooker');
+        const timeStart = document.getElementById('timeStart');
+        const timeEnd = document.getElementById('timeEnd');
+        const progressBarContainer = document.getElementById('progressBarContainer');
+        const progressBar = document.getElementById('progressBar');
+        const timeRemaining = document.getElementById('timeRemaining');
+        const upcomingList = document.getElementById('upcomingList');
+
+        // Clock Update
+        function updateClock() {
+            const now = new Date();
+            clockEl.textContent = now.toLocaleTimeString('en-US', { hour12: false });
+            
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            dateEl.textContent = now.toLocaleDateString('en-US', options);
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Room Selection Setup
+        const urlParams = new URLSearchParams(window.location.search);
+        let currentRoom = urlParams.get('room') || localStorage.getItem('selectedRoom') || 'room_b';
+        roomSelector.value = currentRoom;
+
+        roomSelector.addEventListener('change', (e) => {
+            currentRoom = e.target.value;
+            localStorage.setItem('selectedRoom', currentRoom);
+            const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?room=' + currentRoom;
+            window.history.pushState({ path: newUrl }, '', newUrl);
+            fetchData();
+        });
+
+        // Fetch Data from Odoo Controller
+        async function fetchData() {
+            try {
+                const response = await fetch(`/room_booking/api/bookings?room=${currentRoom}`);
+                if (!response.ok) throw new Error('Network response was not ok');
+                const data = await response.json();
+                renderUI(data);
+            } catch (error) {
+                console.error("Error fetching booking data:", error);
+                meetingTitle.textContent = "Connection Failure";
+                meetingBooker.textContent = "Please check the network connection or Odoo server status.";
+            }
+        }
+
+        // Render UI based on data
+        function renderUI(data) {
+            const now = new Date();
+            const currentMeeting = data.current_meeting;
+            const upcoming = data.upcoming_meetings || [];
+
+            // Reset Card Styles
+            statusCard.className = statusCard.className.replace(/glow-green|glow-red/g, '').trim();
+
+            if (currentMeeting) {
+                // Render BUSY UI
+                statusCard.classList.add('glow-red');
+                statusIndicator.className = "h-4 w-4 rounded-full bg-red-500 animate-pulse";
+                statusText.textContent = "BUSY / IN USE";
+                statusText.className = "font-outfit font-bold text-2xl tracking-wide text-red-500";
+                statusIcon.className = "fa-solid fa-ban text-red-500 text-2xl";
+                
+                meetingTitle.textContent = currentMeeting.name;
+                meetingBooker.innerHTML = `<i class="fa-solid fa-user text-slate-400 mr-2"></i>Booker: <span class="text-slate-200 font-semibold">${currentMeeting.user_name}</span>`;
+                
+                const start = new Date(currentMeeting.start);
+                const end = new Date(currentMeeting.end);
+                timeStart.textContent = start.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+                timeEnd.textContent = end.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+                
+                progressBarContainer.classList.remove('hidden');
+                
+                // Calculate progress
+                const total = end - start;
+                const elapsed = now - start;
+                const percent = Math.min(100, Math.max(0, (elapsed / total) * 100));
+                progressBar.style.width = percent + '%';
+                
+                // Time remaining text
+                const diffMs = end - now;
+                const diffMins = Math.ceil(diffMs / 60000);
+                if (diffMins > 0) {
+                    timeRemaining.textContent = `About ${diffMins} minutes remaining`;
+                } else {
+                    timeRemaining.textContent = "Ending soon";
+                }
+            } else {
+                // Render AVAILABLE UI
+                statusCard.classList.add('glow-green');
+                statusIndicator.className = "h-4 w-4 rounded-full bg-emerald-500 animate-pulse-slow";
+                statusText.textContent = "AVAILABLE";
+                statusText.className = "font-outfit font-bold text-2xl tracking-wide text-emerald-400";
+                statusIcon.className = "fa-solid fa-calendar-check text-emerald-400 text-2xl";
+                
+                meetingTitle.textContent = "Available";
+                
+                progressBarContainer.classList.add('hidden');
+                timeRemaining.textContent = "";
+
+                if (upcoming.length > 0) {
+                    const next = upcoming[0];
+                    const nextStart = new Date(next.start);
+                    const timeString = nextStart.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+                    meetingBooker.innerHTML = `<i class="fa-solid fa-calendar-days text-slate-400 mr-2"></i>Next meeting at <span class="text-slate-200 font-semibold">${timeString}</span> (${next.name})`;
+                    
+                    timeStart.textContent = "Available until";
+                    timeEnd.textContent = timeString;
+                } else {
+                    meetingBooker.innerHTML = `<i class="fa-solid fa-calendar-days text-slate-400 mr-2"></i>No more meetings today`;
+                    timeStart.textContent = "";
+                    timeEnd.textContent = "";
+                }
+            }
+
+            // Render Upcoming List
+            upcomingList.innerHTML = "";
+            if (upcoming.length === 0) {
+                upcomingList.innerHTML = `
+                    <div class="text-center p-6 border border-dashed border-slate-800 rounded-2xl">
+                        <i class="fa-regular fa-calendar text-slate-600 text-3xl mb-2"></i>
+                        <p class="text-sm text-slate-500">No upcoming meetings scheduled</p>
+                    </div>
+                `;
+            } else {
+                upcoming.forEach(item => {
+                    const start = new Date(item.start);
+                    const end = new Date(item.end);
+                    const timeRange = start.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) + " - " + end.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+                    
+                    const isDraft = item.state === 'draft';
+                    const cardBgClass = isDraft 
+                        ? "bg-amber-950/15 border-amber-900/30 text-amber-200/90 hover:border-amber-700/50" 
+                        : "bg-emerald-950/15 border-emerald-900/30 text-emerald-200/90 hover:border-emerald-700/50";
+                    const badgeClass = isDraft 
+                        ? "bg-amber-950 text-amber-400 border border-amber-800/40" 
+                        : "bg-emerald-950 text-emerald-400 border border-emerald-800/40";
+                    const stateLabel = isDraft ? "Pending" : "Approved";
+                    
+                    const div = document.createElement('div');
+                    div.className = `p-4 border rounded-2xl hover:border-slate-800 transition-all flex flex-col gap-2 ${cardBgClass}`;
+                    div.innerHTML = `
+                        <div class="flex justify-between items-start">
+                            <span class="text-xs font-semibold px-2.5 py-1 bg-slate-900/80 border border-slate-850 text-indigo-400 rounded-full">${timeRange}</span>
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${badgeClass}">${stateLabel}</span>
+                        </div>
+                        <div class="flex justify-between items-end gap-2 mt-1">
+                            <h4 class="font-semibold text-slate-200 text-sm md:text-base truncate flex-grow">${item.name}</h4>
+                            <span class="text-xs text-slate-400 whitespace-nowrap"><i class="fa-regular fa-user mr-1 text-slate-500"></i>${item.user_name}</span>
+                        </div>
+                    `;
+                    upcomingList.appendChild(div);
+                });
+            }
+        }
+
+        // Start Fetch Loops
+        fetchData();
+        setInterval(fetchData, 15000); // 15 seconds polling
+    </script>
+</body>
+</html>

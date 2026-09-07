@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Define a dedicated Dashboard Group so it appears separately in the menu -->
+        <record id="spreadsheet_dashboard_group_helpdesk_custom" model="spreadsheet.dashboard.group">
+            <field name="name">Helpdesk Custom Analytics</field>
+            <field name="sequence">200</field>
+        </record>
+
+        <!-- Define the Custom Spreadsheet Dashboard -->
+        <record id="spreadsheet_dashboard_helpdesk_custom" model="spreadsheet.dashboard">
+            <field name="name">Helpdesk Status Overview</field>
+            <field name="dashboard_group_id" ref="spreadsheet_dashboard_group_helpdesk_custom"/>
+            <field name="sequence">10</field>
+            <!-- Reference the JSON spreadsheet definition -->
+            <field name="spreadsheet_binary_data" type="base64" file="custom_spreadsheet_dashboard/data/dashboard_data.json"/>
+        </record>
+    </data>
+</odoo>
