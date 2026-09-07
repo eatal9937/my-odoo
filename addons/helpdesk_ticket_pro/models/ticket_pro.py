@@ -1,3 +1,4 @@
+import re
 from odoo import models, fields, api
 from datetime import timedelta
 
@@ -178,25 +179,91 @@ class HelpdeskTicketPro(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        created_records = self.env['helpdesk.ticket.pro']
+        new_vals_list = []
+
         for vals in vals_list:
-            if vals.get('avaya_sr_number'):
-                vals['is_avaya_support'] = True
-                if not vals.get('ticket_source'):
-                    vals['ticket_source'] = 'avaya_support'
-            if vals.get('is_avaya_support') and vals.get('avaya_severity') and not vals.get('priority'):
-                sev_map = {'p1': '3', 'p2': '2', 'p3': '1', 'p4': '0'}
-                vals['priority'] = sev_map.get(vals['avaya_severity'], '0')
-            if vals.get('name', 'New') == 'New':
-                vals['name'] = self.env['ir.sequence'].next_by_code('helpdesk.ticket.pro') or 'New'
-        records = super().create(vals_list)
-        for record in records:
-            if not record.access_token:
-                record._portal_ensure_token()
-            if not record.deadline:
-                record._onchange_sla_calculation()
-            if record.user_id:
-                record._send_assignment_email()
-        return records
+            existing = None
+            sr_num = vals.get('avaya_sr_number')
+
+            # 1. Deduplication check by Avaya SR#
+            if sr_num:
+                # Find active / non-closed ticket first
+                existing = self.search([
+                    ('avaya_sr_number', '=', sr_num),
+                    ('state', 'not in', ['closed', 'solved'])
+                ], order='id desc', limit=1)
+                # If none active, find latest ticket with this SR#
+                if not existing:
+                    existing = self.search([
+                        ('avaya_sr_number', '=', sr_num)
+                    ], order='id desc', limit=1)
+
+            # 2. Deduplication check by Ticket Ref in Subject (e.g. "Re: [TKT-00038] ...")
+            if not existing and vals.get('subject'):
+                tkt_match = re.search(r'\b(TKT-\d{5})\b', vals.get('subject', ''))
+                if tkt_match:
+                    tkt_ref = tkt_match.group(1)
+                    existing = self.search([('name', '=', tkt_ref)], limit=1)
+
+            # 3. If matching existing ticket is found: APPEND TO CHATTER, DO NOT DUPLICATE!
+            if existing:
+                update_vals = {}
+                if vals.get('avaya_status') and vals.get('avaya_status') != existing.avaya_status:
+                    update_vals['avaya_status'] = vals['avaya_status']
+                if vals.get('avaya_severity') and vals.get('avaya_severity') != existing.avaya_severity:
+                    update_vals['avaya_severity'] = vals['avaya_severity']
+                    sev_map = {'p1': '3', 'p2': '2', 'p3': '1', 'p4': '0'}
+                    if vals['avaya_severity'] in sev_map:
+                        update_vals['priority'] = sev_map[vals['avaya_severity']]
+                if vals.get('avaya_contact_name') and not existing.avaya_contact_name:
+                    update_vals['avaya_contact_name'] = vals['avaya_contact_name']
+                if vals.get('avaya_contact_phone') and not existing.avaya_contact_phone:
+                    update_vals['avaya_contact_phone'] = vals['avaya_contact_phone']
+                if vals.get('avaya_contact_email') and not existing.avaya_contact_email:
+                    update_vals['avaya_contact_email'] = vals['avaya_contact_email']
+
+                if update_vals:
+                    existing.write(update_vals)
+
+                # Post update message to Chatter
+                msg_body = vals.get('description') or vals.get('subject') or 'Activity or reply received.'
+                msg_subject = vals.get('subject') or f"Update on {existing.name}"
+
+                existing.message_post(
+                    body=f"<b>[Email Update / Activity Received]</b><br/>{msg_body}",
+                    subject=msg_subject,
+                    message_type='comment',
+                    subtype_xmlid='mail.mt_comment'
+                )
+
+                created_records |= existing
+            else:
+                new_vals_list.append(vals)
+
+        if new_vals_list:
+            for vals in new_vals_list:
+                if vals.get('avaya_sr_number'):
+                    vals['is_avaya_support'] = True
+                    if not vals.get('ticket_source'):
+                        vals['ticket_source'] = 'avaya_support'
+                if vals.get('is_avaya_support') and vals.get('avaya_severity') and not vals.get('priority'):
+                    sev_map = {'p1': '3', 'p2': '2', 'p3': '1', 'p4': '0'}
+                    vals['priority'] = sev_map.get(vals['avaya_severity'], '0')
+                if vals.get('name', 'New') == 'New':
+                    vals['name'] = self.env['ir.sequence'].next_by_code('helpdesk.ticket.pro') or 'New'
+
+            records = super().create(new_vals_list)
+            for record in records:
+                if not record.access_token:
+                    record._portal_ensure_token()
+                if not record.deadline:
+                    record._onchange_sla_calculation()
+                if record.user_id:
+                    record._send_assignment_email()
+            created_records |= records
+
+        return created_records
 
     def write(self, vals):
         state_changed = 'state' in vals
