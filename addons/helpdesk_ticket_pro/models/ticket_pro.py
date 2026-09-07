@@ -115,6 +115,13 @@ class HelpdeskTicketPro(models.Model):
     ], string='Avaya Severity', tracking=True)
     avaya_status = fields.Char(string='Avaya Status', tracking=True, default='Assigned')
     avaya_portal_url = fields.Char(string='Avaya Portal URL', compute='_compute_avaya_portal_url')
+    avaya_date_reported = fields.Char(string='Avaya Date Reported / Opened', tracking=True)
+    avaya_contact_name = fields.Char(string='Avaya Contact Name', tracking=True)
+    avaya_contact_phone = fields.Char(string='Avaya Contact Phone', tracking=True)
+    avaya_contact_email = fields.Char(string='Avaya Contact Email', tracking=True)
+    avaya_customer_name = fields.Char(string='Primary Customer (Avaya)', tracking=True)
+    avaya_location = fields.Char(string='Location / Region', tracking=True)
+    avaya_owner_sbl = fields.Char(string='Support Group / SBL', tracking=True)
 
     @api.depends('avaya_sr_number')
     def _compute_avaya_portal_url(self):

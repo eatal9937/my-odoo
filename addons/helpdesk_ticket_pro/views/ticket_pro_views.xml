@@ -42,11 +42,24 @@
                                     <field name="sold_to_id" placeholder="e.g. 0052085219"/>
                                     <field name="avaya_product" placeholder="e.g. Avaya Aura Session Manager"/>
                                     <field name="avaya_asset_id" placeholder="e.g. 1-60853371-3"/>
+                                    <field name="avaya_customer_name" placeholder="e.g. Thai Administration Service"/>
+                                    <field name="avaya_date_reported"/>
                                 </group>
                                 <group string="Avaya Severity &amp; Status">
                                     <field name="avaya_severity"/>
                                     <field name="avaya_status"/>
+                                    <field name="avaya_owner_sbl"/>
                                     <field name="avaya_portal_url" widget="url" text="Open Avaya TAC Link" invisible="not avaya_portal_url"/>
+                                </group>
+                            </group>
+                            <group string="Avaya Contact &amp; Site Details">
+                                <group>
+                                    <field name="avaya_contact_name"/>
+                                    <field name="avaya_contact_phone"/>
+                                </group>
+                                <group>
+                                    <field name="avaya_contact_email"/>
+                                    <field name="avaya_location"/>
                                 </group>
                             </group>
                         </page>
