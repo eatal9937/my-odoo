@@ -1,4 +1,5 @@
 import re
+from markupsafe import Markup
 from odoo import models, fields, api
 from datetime import timedelta
 
@@ -231,7 +232,7 @@ class HelpdeskTicketPro(models.Model):
                 msg_subject = vals.get('subject') or f"Update on {existing.name}"
 
                 existing.message_post(
-                    body=f"<b>[Email Update / Activity Received]</b><br/>{msg_body}",
+                    body=Markup(f"<b>[Email Update / Activity Received]</b><br/>{msg_body}"),
                     subject=msg_subject,
                     message_type='comment',
                     subtype_xmlid='mail.mt_comment'
