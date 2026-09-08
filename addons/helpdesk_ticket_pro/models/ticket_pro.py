@@ -186,21 +186,38 @@ class HelpdeskTicketPro(models.Model):
         for vals in vals_list:
             existing = None
             sr_num = vals.get('avaya_sr_number')
+            if sr_num and sr_num.startswith('SR-'):
+                sr_num = None  # ignore fake timestamp fallbacks
 
-            # 1. Deduplication check by Avaya SR#
+            # 1. Deduplication check by explicit Avaya SR#
             if sr_num:
-                # Find active / non-closed ticket first
                 existing = self.search([
                     ('avaya_sr_number', '=', sr_num),
                     ('state', 'not in', ['closed', 'solved'])
                 ], order='id desc', limit=1)
-                # If none active, find latest ticket with this SR#
                 if not existing:
                     existing = self.search([
                         ('avaya_sr_number', '=', sr_num)
                     ], order='id desc', limit=1)
 
-            # 2. Deduplication check by Ticket Ref in Subject (e.g. "Re: [TKT-00038] ...")
+            # 2. Extract standard Avaya SR pattern (1-XXXXXXXXXXX) directly from Subject or Description
+            if not existing:
+                subj = vals.get('subject', '')
+                desc = vals.get('description', '')
+                sr_match = re.search(r'\b(1-\d{10,12})\b', subj) or re.search(r'\b(1-\d{10,12})\b', desc)
+                if sr_match:
+                    detected_sr = sr_match.group(1)
+                    vals['avaya_sr_number'] = detected_sr
+                    existing = self.search([
+                        ('avaya_sr_number', '=', detected_sr),
+                        ('state', 'not in', ['closed', 'solved'])
+                    ], order='id desc', limit=1)
+                    if not existing:
+                        existing = self.search([
+                            ('avaya_sr_number', '=', detected_sr)
+                        ], order='id desc', limit=1)
+
+            # 3. Deduplication check by Ticket Ref in Subject (e.g. "Re: [TKT-00038] ...")
             if not existing and vals.get('subject'):
                 tkt_match = re.search(r'\b(TKT-\d{5})\b', vals.get('subject', ''))
                 if tkt_match:

@@ -154,9 +154,25 @@ class HelpdeskDashboardController(http.Controller):
     @http.route("/helpdesk/api/check_ticket", type="http", auth="public", methods=["GET"], csrf=False)
     def helpdesk_api_check_ticket(self, sr="", ref="", **kwargs):
         tickets_model = request.env["helpdesk.ticket.pro"].sudo()
+        import re
+        sr_val = sr.strip() if sr else ""
+        subject_val = kwargs.get("subject", "").strip()
+
+        universal_match = None
+        if sr_val and not sr_val.startswith("SR-"):
+            m = re.search(r'\b(1-\d{10,12})\b', sr_val)
+            if m:
+                universal_match = m.group(1)
+            else:
+                universal_match = sr_val
+        if not universal_match and subject_val:
+            m = re.search(r'\b(1-\d{10,12})\b', subject_val)
+            if m:
+                universal_match = m.group(1)
+
         domain = []
-        if sr:
-            domain = [("avaya_sr_number", "=", sr.strip())]
+        if universal_match:
+            domain = ["|", ("avaya_sr_number", "=", universal_match), ("subject", "ilike", universal_match)]
         elif ref:
             domain = [("name", "=", ref.strip())]
         else:
@@ -201,8 +217,16 @@ class HelpdeskDashboardController(http.Controller):
         ticket = None
         if ticket_id:
             ticket = tickets_model.browse(int(ticket_id))
-        elif sr_number:
+        elif sr_number and not str(sr_number).startswith("SR-"):
             ticket = tickets_model.search([("avaya_sr_number", "=", sr_number)], order="id desc", limit=1)
+
+        if not ticket or not ticket.exists():
+            import re
+            search_str = f"{sr_number or ''} {data.get('subject', '')}"
+            m = re.search(r'\b(1-\d{10,12})\b', search_str)
+            if m:
+                found_sr = m.group(1)
+                ticket = tickets_model.search(["|", ("avaya_sr_number", "=", found_sr), ("subject", "ilike", found_sr)], order="id desc", limit=1)
 
         if not ticket or not ticket.exists():
             return request.make_response(
