@@ -249,13 +249,24 @@ class HelpdeskDashboardController(http.Controller):
         # Post to Chatter
         sender = data.get("sender_name") or data.get("avaya_contact_name") or ticket.avaya_contact_name or "Avaya Support"
         sender_email = data.get("sender_email") or data.get("avaya_contact_email") or ""
+        recipient = data.get("recipient") or "Avaya Support"
         reply_content = data.get("reply_body")
+        is_outbound = bool(data.get("is_outbound"))
 
         if reply_content:
             email_info = f" &lt;{sender_email}&gt;" if sender_email else ""
-            card_html = Markup(f"""<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #202124; background: #ffffff; border: 1px solid #e0e2e6; border-radius: 8px; padding: 14px; margin: 6px 0; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+            if is_outbound:
+                card_html = Markup(f"""<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #202124; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 14px; margin: 6px 0; box-shadow: 0 1px 2px rgba(0,0,0,0.04);">
+  <div style="border-bottom: 1px solid #dcfce7; padding-bottom: 8px; margin-bottom: 10px;">
+    <span style="display: inline-block; background: #059669; color: #ffffff; font-weight: bold; border-radius: 4px; padding: 2px 7px; font-size: 12px; margin-right: 8px;">📤 เราตอบกลับ (Sent)</span>
+    <strong>{sender}</strong>{email_info} ➔ <strong>{recipient}</strong>
+  </div>
+  <div style="white-space: pre-wrap; color: #1e293b; line-height: 1.7; background: #ffffff; padding: 10px; border-radius: 4px; border: 1px solid #dcfce7;">{reply_content}</div>
+</div>""")
+            else:
+                card_html = Markup(f"""<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #202124; background: #ffffff; border: 1px solid #e0e2e6; border-radius: 8px; padding: 14px; margin: 6px 0; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
   <div style="border-bottom: 1px solid #f1f3f4; padding-bottom: 8px; margin-bottom: 10px;">
-    <span style="display: inline-block; background: #e8f0fe; color: #1a73e8; font-weight: bold; border-radius: 4px; padding: 2px 7px; font-size: 12px; margin-right: 8px;">📩 ข้อความตอบกลับ</span>
+    <span style="display: inline-block; background: #e8f0fe; color: #1a73e8; font-weight: bold; border-radius: 4px; padding: 2px 7px; font-size: 12px; margin-right: 8px;">📩 Avaya Support</span>
     <strong>{sender}</strong>{email_info}
   </div>
   <div style="white-space: pre-wrap; color: #1f1f1f; line-height: 1.7; background: #fdfdfd; padding: 10px; border-radius: 4px; border: 1px solid #f1f3f4;">{reply_content}</div>
