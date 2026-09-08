@@ -247,10 +247,26 @@ class HelpdeskDashboardController(http.Controller):
             ticket.write(update_vals)
 
         # Post to Chatter
-        body_html = data.get("description") or data.get("message") or data.get("subject") or "Activity or reply received."
+        sender = data.get("sender_name") or data.get("avaya_contact_name") or ticket.avaya_contact_name or "Avaya Support"
+        sender_email = data.get("sender_email") or data.get("avaya_contact_email") or ""
+        reply_content = data.get("reply_body")
+
+        if reply_content:
+            email_info = f" &lt;{sender_email}&gt;" if sender_email else ""
+            card_html = Markup(f"""<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #202124; background: #ffffff; border: 1px solid #e0e2e6; border-radius: 8px; padding: 14px; margin: 6px 0; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+  <div style="border-bottom: 1px solid #f1f3f4; padding-bottom: 8px; margin-bottom: 10px;">
+    <span style="display: inline-block; background: #e8f0fe; color: #1a73e8; font-weight: bold; border-radius: 4px; padding: 2px 7px; font-size: 12px; margin-right: 8px;">📩 ข้อความตอบกลับ</span>
+    <strong>{sender}</strong>{email_info}
+  </div>
+  <div style="white-space: pre-wrap; color: #1f1f1f; line-height: 1.7; background: #fdfdfd; padding: 10px; border-radius: 4px; border: 1px solid #f1f3f4;">{reply_content}</div>
+</div>""")
+        else:
+            body_html = data.get("description") or data.get("message") or data.get("subject") or "Activity or reply received."
+            card_html = Markup(f"<b>[Email Update / Activity Received]</b><br/>{body_html}")
+
         msg_subject = data.get("subject") or f"Update on {ticket.name}"
         ticket.message_post(
-            body=Markup(f"<b>[Email Update / Activity Received]</b><br/>{body_html}"),
+            body=card_html,
             subject=msg_subject,
             message_type="comment",
             subtype_xmlid="mail.mt_comment"
