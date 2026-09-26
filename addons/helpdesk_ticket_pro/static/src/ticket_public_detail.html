@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ticket Details - JADS Helpdesk</title>
+  <!-- Google Fonts & Tailwind CSS CDN -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#f0f7ff',
+              100: '#e0effe',
+              500: '#0284c7',
+              600: '#0369a1',
+              700: '#075985',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background-color: #f8fafc;
+      color: #1e293b;
+    }
+    .badge-p1 { background-color: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+    .badge-p2 { background-color: #ffedd5; color: #c2410c; border: 1px solid #fdba74; }
+    .badge-p3 { background-color: #fef9c3; color: #854d0e; border: 1px solid #fde047; }
+    .badge-p4 { background-color: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+    
+    .state-new { background-color: #dbeafe; color: #1d4ed8; }
+    .state-in_progress { background-color: #fef3c7; color: #b45309; }
+    .state-waiting { background-color: #f3e8ff; color: #6b21a8; }
+    .state-solved { background-color: #dcfce7; color: #15803d; }
+    .state-closed { background-color: #f1f5f9; color: #475569; }
+
+    /* Chatter message style resets */
+    .chatter-html img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 6px;
+    }
+    .chatter-html pre, .chatter-html code {
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col font-sans selection:bg-brand-500 selection:text-white">
+
+  <!-- Top Navigation Bar -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <a href="/helpdesk/dashboard" class="flex items-center gap-2 text-slate-900 font-bold text-lg hover:text-brand-600 transition">
+          <span class="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-sky-500/20">
+            <i class="fa-solid fa-headset"></i>
+          </span>
+          <span>JADS <span class="text-sky-600">Helpdesk</span></span>
+        </a>
+        <span class="hidden sm:inline-block px-2.5 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+          <i class="fa-solid fa-eye me-1"></i> Read-Only Portal
+        </span>
+      </div>
+
+      <div class="flex items-center gap-2 sm:gap-3">
+        <button onclick="copyCurrentLink()" id="btnCopyLink" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition">
+          <i class="fa-regular fa-copy"></i>
+          <span class="hidden sm:inline">Copy Link</span>
+        </button>
+        <button onclick="loadTicketData()" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition">
+          <i class="fa-solid fa-rotate" id="refreshIcon"></i>
+          <span class="hidden sm:inline">Refresh</span>
+        </button>
+        <a href="/helpdesk/dashboard" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs sm:text-sm font-semibold text-white bg-slate-800 hover:bg-slate-900 rounded-lg shadow-sm transition">
+          <i class="fa-solid fa-table-columns"></i>
+          <span>Dashboard</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Loading State -->
+  <div id="loadingState" class="max-w-5xl mx-auto w-full px-4 py-16 text-center">
+    <div class="inline-flex items-center justify-center w-14 h-14 rounded-full bg-sky-50 text-sky-600 mb-4 animate-spin">
+      <i class="fa-solid fa-circle-notch text-2xl"></i>
+    </div>
+    <h3 class="text-lg font-semibold text-slate-800">Loading ticket details...</h3>
+    <p class="text-slate-500 text-sm mt-1">Please wait while the latest communication history is retrieved.</p>
+  </div>
+
+  <!-- Error State -->
+  <div id="errorState" class="hidden max-w-lg mx-auto w-full px-4 py-16 text-center">
+    <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-rose-50 text-rose-500 mb-4">
+      <i class="fa-solid fa-triangle-exclamation text-3xl"></i>
+    </div>
+    <h3 class="text-xl font-bold text-slate-800" id="errorMessage">Ticket Not Found</h3>
+    <p class="text-slate-500 text-sm mt-2 mb-6">The ticket number or reference code is invalid or does not exist.</p>
+    <a href="/helpdesk/dashboard" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 text-white font-medium text-sm hover:bg-slate-800 transition">
+      <i class="fa-solid fa-arrow-left"></i> Return to Dashboard
+    </a>
+  </div>
+
+  <!-- Main Content View -->
+  <main id="ticketContainer" class="hidden max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex-1">
+    
+    <!-- Top Summary Banner -->
+    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 sm:p-7 mb-6 relative overflow-hidden">
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+        <div>
+          <div class="flex flex-wrap items-center gap-2.5 mb-2">
+            <span id="ticketRef" class="text-xs sm:text-sm font-extrabold tracking-wider px-3 py-1 rounded-lg bg-slate-900 text-white font-mono shadow-sm">
+              #TKT-00000
+            </span>
+            <span id="stateBadge" class="text-xs font-bold px-3 py-1 rounded-lg uppercase tracking-wide state-new">
+              New
+            </span>
+            <span id="priorityBadge" class="text-xs font-bold px-3 py-1 rounded-lg badge-p3">
+              P3 - Minor
+            </span>
+            <span id="sourceBadge" class="text-xs font-medium px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+              <i class="fa-solid fa-satellite-dish me-1 text-slate-400"></i> <span id="sourceText">Avaya TAC</span>
+            </span>
+          </div>
+
+          <h1 id="ticketSubject" class="text-xl sm:text-2xl font-bold text-slate-900 leading-snug">
+            -
+          </h1>
+        </div>
+
+        <div class="flex flex-row lg:flex-col items-center lg:items-end justify-between gap-2 text-xs sm:text-sm text-slate-500 shrink-0">
+          <div>Created: <span id="createDate" class="font-medium text-slate-700">-</span></div>
+          <div>Updated: <span id="writeDate" class="font-medium text-slate-700">-</span></div>
+        </div>
+      </div>
+
+      <!-- Quick Info Grid -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 pt-5">
+        <div class="bg-slate-50/70 p-3 rounded-xl border border-slate-100">
+          <div class="text-xs text-slate-500 font-medium mb-1">🏢 Customer</div>
+          <div id="customerName" class="font-semibold text-slate-800 text-sm truncate" title="">-</div>
+        </div>
+
+        <div class="bg-slate-50/70 p-3 rounded-xl border border-slate-100">
+          <div class="text-xs text-slate-500 font-medium mb-1">🔥 Avaya SR#</div>
+          <div class="flex items-center gap-1.5">
+            <span id="avayaSrNumber" class="font-mono font-bold text-slate-900 text-sm">-</span>
+            <a id="avayaPortalLink" href="#" target="_blank" class="hidden text-sky-600 hover:text-sky-800 text-xs" title="Open Avaya TAC Portal">
+              <i class="fa-solid fa-arrow-up-right-from-square"></i>
+            </a>
+          </div>
+        </div>
+
+        <div class="bg-slate-50/70 p-3 rounded-xl border border-slate-100">
+          <div class="text-xs text-slate-500 font-medium mb-1">📦 Product</div>
+          <div id="avayaProduct" class="font-semibold text-slate-800 text-sm truncate" title="">-</div>
+        </div>
+
+        <div class="bg-slate-50/70 p-3 rounded-xl border border-slate-100">
+          <div class="text-xs text-slate-500 font-medium mb-1">🏷 Sold To / FL</div>
+          <div id="soldToId" class="font-mono font-semibold text-slate-800 text-sm">-</div>
+        </div>
+
+        <div class="bg-slate-50/70 p-3 rounded-xl border border-slate-100 flex flex-col justify-between">
+          <div class="text-xs text-sky-600 font-bold mb-1 flex items-center justify-between">
+            <span>👤 Site Engineer (ผู้ดูแลไซต์)</span>
+            <span id="siteEngSaved" class="text-[10px] text-emerald-600 font-semibold opacity-0 transition-opacity">✓ บันทึกแล้ว</span>
+          </div>
+          <select id="siteEngineerSelect" onchange="changeSiteEngineer(this.value)" class="w-full bg-white border border-slate-300 text-slate-800 text-xs font-semibold rounded-lg px-2 py-1 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 cursor-pointer">
+            <option value="Phongthep Phimthong">Phongthep Phimthong (Captain)</option>
+            <option value="Beer PRIORITY">Beer PRIORITY (เบียร์)</option>
+            <option value="Chalerm">Chalerm (เฉลิม)</option>
+            <option value="Jackie Chan Nakama">Jackie Chan Nakama (แจ็คกี้)</option>
+            <option value="kai_amnat">kai_amnat (ไก่)</option>
+            <option value="Nueng">Nueng (หนึ่ง)</option>
+            <option value="Romance">Romance (โรม)</option>
+            <option value="Surawat🐸6915">Surawat🐸6915 (กบ)</option>
+            <option value="tohtoro Qool @60">tohtoro Qool @60 (ต่อ)</option>
+            <option value="Toh Phakdee">Toh Phakdee (โต้ง)</option>
+            <option value="Ton">Ton (ต้น)</option>
+            <option value="Other">Other (อื่นๆ)</option>
+          </select>
+        </div>
+
+        <div class="bg-slate-50/70 p-3 rounded-xl border border-slate-100">
+          <div class="text-xs text-slate-500 font-medium mb-1">⏱ Avaya Status</div>
+          <div id="avayaStatus" class="font-semibold text-slate-800 text-sm truncate">-</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2 Column Layout: Details & History -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      <!-- Left Column: Detailed Specifications & AI Summary (4 cols) -->
+      <div class="lg:col-span-4 space-y-6">
+        
+        <!-- ✨ AI Stage & Executive Progress Summary Box -->
+        <div id="aiSummaryCard" class="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl shadow-lg p-5 border border-indigo-500/40 relative overflow-hidden">
+          <div class="absolute -right-8 -top-8 w-32 h-32 bg-indigo-500/20 rounded-full blur-2xl pointer-events-none"></div>
+          
+          <div class="flex items-center justify-between gap-2 mb-3">
+            <span class="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-cyan-400">
+              <i class="fa-solid fa-wand-magic-sparkles animate-pulse text-cyan-300"></i>
+              <span id="aiCardHeaderLabel">AI Stage Summary</span>
+            </span>
+            <div class="flex items-center gap-2">
+              <!-- Language Switcher Pill -->
+              <div class="inline-flex items-center bg-white/10 rounded-lg p-0.5 border border-white/10 text-[10px] shadow-sm">
+                <button type="button" id="btnLangEn" onclick="setSummaryLang('en')" class="px-2 py-0.5 rounded font-bold transition bg-cyan-500 text-slate-950">EN</button>
+                <button type="button" id="btnLangTh" onclick="setSummaryLang('th')" class="px-2 py-0.5 rounded font-semibold text-slate-300 hover:text-white transition">TH</button>
+              </div>
+              <span id="aiStageBadge" class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                Assessing...
+              </span>
+            </div>
+          </div>
+
+          <h3 id="aiStageTitle" class="text-base font-extrabold text-white leading-snug">
+            Analyzing Incident...
+          </h3>
+
+          <p id="aiStatusSummary" class="text-xs text-slate-300 mt-2.5 leading-relaxed">
+            AI is analyzing the communication history and latest engineer notes.
+          </p>
+
+          <div class="mt-4 pt-3.5 border-t border-white/10 space-y-2.5 text-xs">
+            <div class="flex items-start gap-2 bg-white/5 p-2.5 rounded-xl border border-white/5">
+              <i class="fa-solid fa-circle-arrow-right text-emerald-400 mt-0.5 shrink-0"></i>
+              <div>
+                <span id="aiNextActionLabel" class="text-slate-400 font-medium">Next Action:</span>
+                <span id="aiNextAction" class="font-semibold text-emerald-300 ml-1">-</span>
+              </div>
+            </div>
+            
+            <div class="flex items-center justify-between text-[11px] px-0.5 pt-0.5">
+              <span class="text-slate-400"><span id="aiActionWithLabel">Action with:</span> <strong id="aiActionOwner" class="text-white font-semibold">-</strong></span>
+              <span id="aiSourceBadge" class="text-[10px] text-cyan-400/90 font-mono flex items-center gap-1">
+                <i class="fa-solid fa-microchip"></i> AI Synthesizer
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Contact & Location Box -->
+        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
+          <h3 class="text-sm font-bold uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-2">
+            <i class="fa-solid fa-address-card text-slate-500"></i> Contact &amp; Location
+          </h3>
+          <ul class="space-y-3 text-sm">
+            <li class="flex flex-col">
+              <span class="text-xs text-slate-500">Contact Name:</span>
+              <span id="contactName" class="font-semibold text-slate-800">-</span>
+            </li>
+            <li class="flex flex-col">
+              <span class="text-xs text-slate-500">Phone Number:</span>
+              <span id="contactPhone" class="font-mono text-slate-800">-</span>
+            </li>
+            <li class="flex flex-col">
+              <span class="text-xs text-slate-500">Email Address:</span>
+              <span id="contactEmail" class="font-mono text-slate-800 break-all">-</span>
+            </li>
+            <li class="flex flex-col border-t border-slate-100 pt-2">
+              <span class="text-xs text-slate-500">Site Location:</span>
+              <span id="locationAddress" class="text-slate-700 leading-relaxed">-</span>
+            </li>
+            <li class="flex flex-col" id="sblRow">
+              <span class="text-xs text-slate-500">Avaya Support Group (SBL):</span>
+              <span id="ownerSbl" class="text-slate-700 font-medium">-</span>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Issue Description Box -->
+        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
+          <h3 class="text-sm font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
+            <i class="fa-solid fa-file-lines text-slate-500"></i> Initial Issue Description
+          </h3>
+          <div id="ticketDescription" class="prose prose-sm max-w-none text-slate-700 overflow-x-auto chatter-html leading-relaxed">
+            -
+          </div>
+        </div>
+
+        <!-- Staff Direct Link -->
+        <div class="p-4 rounded-xl bg-slate-100 border border-slate-200 text-center">
+          <p class="text-xs text-slate-500 mb-2.5">For engineers &amp; staff with an Odoo account</p>
+          <a id="backendBtn" href="#" target="_blank" class="inline-flex items-center justify-center gap-2 w-full py-2 px-3 rounded-lg bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs border border-slate-300 shadow-sm transition">
+            <i class="fa-solid fa-lock"></i> Open in Odoo Backend
+          </a>
+        </div>
+
+      </div>
+
+      <!-- Right Column: Timeline & Discussion (8 cols) -->
+      <div class="lg:col-span-8 space-y-4">
+        
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <i class="fa-solid fa-comments text-sky-600"></i> Communication &amp; Activity Log
+            </h2>
+            <span id="messageCountBadge" class="px-2 py-0.5 text-xs font-bold rounded-full bg-sky-100 text-sky-700">0</span>
+          </div>
+
+          <div class="flex items-center gap-2 text-xs">
+            <span class="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 font-semibold border border-indigo-100 flex items-center gap-1.5 shadow-sm">
+              <i class="fa-solid fa-arrow-down-short-wide text-indigo-600"></i> Newest First
+            </span>
+            <span class="text-slate-400 flex items-center gap-1.5 ml-1">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Live Auto-Sync
+            </span>
+          </div>
+        </div>
+
+        <!-- Timeline Stream -->
+        <div id="timelineList" class="space-y-4">
+          <!-- Dynamically populated -->
+        </div>
+
+        <!-- Empty Chatter Notice -->
+        <div id="noMessagesNotice" class="hidden p-8 text-center bg-white rounded-2xl border border-slate-200">
+          <i class="fa-regular fa-message text-3xl text-slate-300 mb-2"></i>
+          <p class="text-sm font-medium text-slate-600">No message history yet</p>
+          <p class="text-xs text-slate-400 mt-1">Replies from Avaya TAC and engineering team will appear here automatically.</p>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-white border-t border-slate-200 py-6 mt-12 text-center text-xs text-slate-400">
+    <div class="max-w-7xl mx-auto px-4">
+      <p>&copy; 2026 JADS Communication Co., Ltd. • Helpdesk Ticket Intelligence Portal</p>
+      <p class="mt-1 text-slate-400 font-mono text-[11px]">Powered by Odoo 17 Enterprise &amp; AI Voice Integration</p>
+    </div>
+  </footer>
+
+  <!-- Script to Fetch and Render Data -->
+  <script>
+    // Extract identifier from URL (e.g. /helpdesk/ticket/57 or /helpdesk/ticket/TKT-00049)
+    function getTicketIdentifier() {
+      const pathParts = window.location.pathname.split('/').filter(Boolean);
+      return pathParts[pathParts.length - 1] || '';
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '-';
+      try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return dateStr;
+        return d.toLocaleString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      } catch(e) {
+        return dateStr;
+      }
+    }
+
+    function formatRelativeTime(dateStr) {
+      if (!dateStr) return '';
+      try {
+        const d = new Date(dateStr);
+        const now = new Date();
+        const diffMs = now - d;
+        const diffMins = Math.floor(diffMs / 60000);
+        if (diffMins < 1) return 'Just now';
+        if (diffMins < 60) return `${diffMins}m ago`;
+        const diffHours = Math.floor(diffMins / 60);
+        if (diffHours < 24) return `${diffHours}h ago`;
+        const diffDays = Math.floor(diffHours / 24);
+        return `${diffDays}d ago`;
+      } catch(e) {
+        return '';
+      }
+    }
+
+    function copyCurrentLink() {
+      navigator.clipboard.writeText(window.location.href).then(() => {
+        const btn = document.getElementById('btnCopyLink');
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-check text-emerald-600"></i> <span class="hidden sm:inline text-emerald-600 font-bold">Copied!</span>';
+        setTimeout(() => {
+          btn.innerHTML = originalHtml;
+        }, 2000);
+      });
+    }
+
+    let currentSummaryLang = localStorage.getItem('jads_ai_summary_lang') || 'en';
+    let cachedAiSummary = null;
+
+    function getLocalizedField(val) {
+      if (!val) return '';
+      if (typeof val === 'object') {
+        return val[currentSummaryLang] || val['en'] || val['th'] || '';
+      }
+      return val;
+    }
+
+    function setSummaryLang(lang) {
+      currentSummaryLang = lang;
+      try {
+        localStorage.setItem('jads_ai_summary_lang', lang);
+      } catch (e) {}
+
+      // Update button styling
+      const btnEn = document.getElementById('btnLangEn');
+      const btnTh = document.getElementById('btnLangTh');
+      if (btnEn && btnTh) {
+        if (lang === 'en') {
+          btnEn.className = 'px-2 py-0.5 rounded font-bold transition bg-cyan-500 text-slate-950 shadow-sm';
+          btnTh.className = 'px-2 py-0.5 rounded font-semibold text-slate-300 hover:text-white transition';
+        } else {
+          btnTh.className = 'px-2 py-0.5 rounded font-bold transition bg-cyan-500 text-slate-950 shadow-sm';
+          btnEn.className = 'px-2 py-0.5 rounded font-semibold text-slate-300 hover:text-white transition';
+        }
+      }
+
+      // Update static card labels
+      const headerLabel = document.getElementById('aiCardHeaderLabel');
+      const nextActionLabel = document.getElementById('aiNextActionLabel');
+      const actionWithLabel = document.getElementById('aiActionWithLabel');
+      
+      if (lang === 'th') {
+        if (headerLabel) headerLabel.innerText = 'สรุปสถานะด้วย AI';
+        if (nextActionLabel) nextActionLabel.innerText = 'ขั้นตอนถัดไป:';
+        if (actionWithLabel) actionWithLabel.innerText = 'ผู้รับผิดชอบดำเนินการ:';
+      } else {
+        if (headerLabel) headerLabel.innerText = 'AI Stage Summary';
+        if (nextActionLabel) nextActionLabel.innerText = 'Next Action:';
+        if (actionWithLabel) actionWithLabel.innerText = 'Action with:';
+      }
+
+      if (cachedAiSummary) {
+        renderAiSummaryCard(cachedAiSummary);
+      }
+    }
+
+    function renderAiSummaryCard(aiSummary) {
+      if (!aiSummary) return;
+      const badgeEl = document.getElementById('aiStageBadge');
+      if (badgeEl) {
+        badgeEl.className = `px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${aiSummary.badge_color || 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'}`;
+        badgeEl.innerText = getLocalizedField(aiSummary.stage_badge) || 'Active';
+      }
+      document.getElementById('aiStageTitle').innerText = getLocalizedField(aiSummary.stage_title) || 'Active Investigation';
+      document.getElementById('aiStatusSummary').innerText = getLocalizedField(aiSummary.status_summary) || '-';
+      document.getElementById('aiNextAction').innerText = getLocalizedField(aiSummary.next_action) || '-';
+      document.getElementById('aiActionOwner').innerText = getLocalizedField(aiSummary.action_owner) || '-';
+      if (aiSummary.source) {
+        document.getElementById('aiSourceBadge').innerHTML = `<i class="fa-solid fa-microchip"></i> ${escapeHtml(aiSummary.source)}`;
+      }
+    }
+
+    async function loadTicketData() {
+      const idOrRef = getTicketIdentifier();
+      if (!idOrRef) {
+        showError('Ticket identifier missing from URL');
+        return;
+      }
+
+      const refreshIcon = document.getElementById('refreshIcon');
+      if (refreshIcon) refreshIcon.classList.add('animate-spin');
+
+      try {
+        const res = await fetch(`/helpdesk/api/ticket_detail/${encodeURIComponent(idOrRef)}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        if (!data.success || !data.ticket) {
+          showError(data.error || 'Ticket record not found in system');
+          return;
+        }
+
+        renderTicket(data.ticket, data.messages || [], data.ai_summary || null);
+      } catch (err) {
+        console.error('Fetch error:', err);
+        showError('Unable to load ticket details. Please check network connection.');
+      } finally {
+        if (refreshIcon) refreshIcon.classList.remove('animate-spin');
+      }
+    }
+
+    function showError(msg) {
+      document.getElementById('loadingState').classList.add('hidden');
+      document.getElementById('ticketContainer').classList.add('hidden');
+      document.getElementById('errorState').classList.remove('hidden');
+      document.getElementById('errorMessage').innerText = msg;
+    }
+
+    function renderTicket(t, messages, aiSummary) {
+      document.getElementById('loadingState').classList.add('hidden');
+      document.getElementById('errorState').classList.add('hidden');
+      document.getElementById('ticketContainer').classList.remove('hidden');
+
+      // Update Page Title
+      document.title = `${t.ref} - ${t.subject} | JADS Helpdesk`;
+
+      // Header values
+      document.getElementById('ticketRef').innerText = `#${t.ref}`;
+      document.getElementById('ticketSubject').innerText = t.subject;
+      document.getElementById('createDate').innerText = formatDate(t.create_date);
+      document.getElementById('writeDate').innerText = formatDate(t.write_date);
+
+      // Render AI Stage & Progress Summary
+      cachedAiSummary = aiSummary;
+      setSummaryLang(currentSummaryLang);
+
+      // State Badge
+      const stateEl = document.getElementById('stateBadge');
+      stateEl.className = 'text-xs font-bold px-3 py-1 rounded-lg uppercase tracking-wide ';
+      const stateLabels = {
+        new: 'New',
+        in_progress: 'In Progress',
+        waiting: 'Waiting / Pending',
+        solved: 'Solved',
+        closed: 'Closed'
+      };
+      stateEl.innerText = stateLabels[t.state] || t.state;
+      stateEl.classList.add(`state-${t.state || 'new'}`);
+
+      // Priority Badge
+      const prioEl = document.getElementById('priorityBadge');
+      const sev = (t.avaya_severity || '').toLowerCase();
+      prioEl.className = 'text-xs font-bold px-3 py-1 rounded-lg ';
+      if (sev === 'p1' || t.priority === '3') {
+        prioEl.innerText = 'P1 - Critical (System Down)';
+        prioEl.classList.add('badge-p1');
+      } else if (sev === 'p2' || t.priority === '2') {
+        prioEl.innerText = 'P2 - Major (Severe Impact)';
+        prioEl.classList.add('badge-p2');
+      } else if (sev === 'p3' || t.priority === '1') {
+        prioEl.innerText = 'P3 - Minor (Degraded)';
+        prioEl.classList.add('badge-p3');
+      } else {
+        prioEl.innerText = 'P4 - Informational';
+        prioEl.classList.add('badge-p4');
+      }
+
+      // Source
+      const sourceText = document.getElementById('sourceText');
+      sourceText.innerText = t.is_avaya_support ? 'Avaya TAC Case' : (t.ticket_source || 'Customer Direct');
+
+      // Key Metrics
+      document.getElementById('customerName').innerText = t.customer || '-';
+      document.getElementById('customerName').title = t.customer || '';
+
+      document.getElementById('avayaSrNumber').innerText = t.avaya_sr_number || '-';
+      if (t.avaya_portal_url || t.avaya_sr_number) {
+        const pLink = document.getElementById('avayaPortalLink');
+        pLink.href = t.avaya_portal_url || `https://support.avaya.com/support/en/secure/service-requests/displaySR?srNum=${t.avaya_sr_number}`;
+        pLink.classList.remove('hidden');
+      }
+
+      document.getElementById('avayaProduct').innerText = t.avaya_product || t.category || '-';
+      document.getElementById('avayaProduct').title = t.avaya_product || '';
+
+      document.getElementById('soldToId').innerText = t.sold_to_id || '-';
+      currentLoadedTicketId = t.id;
+      const seSelect = document.getElementById('siteEngineerSelect');
+      if (seSelect) {
+        const currentEng = t.site_engineer || t.assigned_to || 'Phongthep Phimthong';
+        let found = false;
+        for (let opt of seSelect.options) {
+          if (opt.value === currentEng) {
+            opt.selected = true;
+            found = true;
+            break;
+          }
+        }
+        if (!found && currentEng) {
+          const newOpt = document.createElement('option');
+          newOpt.value = currentEng;
+          newOpt.text = currentEng;
+          newOpt.selected = true;
+          seSelect.appendChild(newOpt);
+        }
+      }
+      document.getElementById('avayaStatus').innerText = t.avaya_status || '-';
+
+      // Left Column Specs
+      let contactName = t.avaya_contact_name || '-';
+      let contactPhone = t.avaya_contact_phone || '-';
+      let contactEmail = t.avaya_contact_email || '-';
+
+      if ((!t.avaya_contact_name || t.avaya_contact_name === '-') && t.description) {
+        const contactMatch = t.description.match(/(?:Contact Person|ผู้ติดต่อ).*?:\s*([^(<]+)(?:\(([^,)]+),\s*([^)]+)\))?/i);
+        if (contactMatch) {
+          if (contactMatch[1]) contactName = contactMatch[1].trim();
+          if (contactMatch[2]) contactPhone = contactMatch[2].trim();
+          if (contactMatch[3]) contactEmail = contactMatch[3].trim();
+        }
+      }
+
+      document.getElementById('contactName').innerText = contactName;
+      document.getElementById('contactPhone').innerText = contactPhone;
+      document.getElementById('contactEmail').innerText = contactEmail;
+      document.getElementById('locationAddress').innerText = t.avaya_location || '-';
+
+      if (t.avaya_owner_sbl) {
+        document.getElementById('ownerSbl').innerText = t.avaya_owner_sbl;
+        document.getElementById('sblRow').classList.remove('hidden');
+      } else {
+        document.getElementById('sblRow').classList.add('hidden');
+      }
+
+      // Description
+      const descEl = document.getElementById('ticketDescription');
+      if (t.description && t.description.trim().length > 0) {
+        let descHtml = t.description
+          .replace(/ผู้ติดต่อ\s*\(Contact Person\):/gi, 'Contact Person:')
+          .replace(/ลูกค้า\s*\(Customer\):/gi, 'Customer:')
+          .replace(/รายละเอียดคำร้อง\s*\(Request Details\s*(?:&amp;|&)\s*Comments\):/gi, 'Request Details &amp; Comments:');
+        descEl.innerHTML = descHtml;
+      } else {
+        descEl.innerHTML = '<p class="text-slate-400 italic">No initial description provided.</p>';
+      }
+
+      // Backend link
+      document.getElementById('backendBtn').href = t.backend_url || `/web#id=${t.id}&model=helpdesk.ticket.pro&view_type=form`;
+
+      // Render Messages Timeline
+      renderMessages(messages);
+    }
+
+    function renderMessages(messages) {
+      const listEl = document.getElementById('timelineList');
+      const emptyNotice = document.getElementById('noMessagesNotice');
+      const countBadge = document.getElementById('messageCountBadge');
+
+      listEl.innerHTML = '';
+      countBadge.innerText = messages ? messages.length : 0;
+
+      if (!messages || messages.length === 0) {
+        emptyNotice.classList.remove('hidden');
+        return;
+      }
+
+      emptyNotice.classList.add('hidden');
+
+      // Sort messages descending: Latest on Top
+      const sortedMessages = [...messages].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+      sortedMessages.forEach((msg, idx) => {
+        const card = document.createElement('div');
+        card.className = 'bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 sm:p-5 transition hover:shadow-md';
+
+        const rawBody = msg.body || '';
+        const isOutbound = rawBody.includes('\u0e40\u0e23\u0e32\u0e15\u0e2d\u0e1a\u0e01\u0e25\u0e31\u0e1a') || rawBody.includes('Sent') || rawBody.includes('Outbound') || rawBody.includes('Engineer Reply') || (msg.author && msg.author.includes('Phongthep'));
+        const isAvaya = rawBody.includes('Avaya Support') || rawBody.includes('customerstatus@avaya.com') || (msg.email_from && msg.email_from.includes('avaya.com'));
+
+        let headerColor = 'text-slate-700 bg-slate-50 border-slate-200';
+        let badgeHtml = '<span class="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-200 text-slate-700">Update</span>';
+
+        if (isOutbound) {
+          headerColor = 'text-emerald-800 bg-emerald-50/70 border-emerald-100';
+          badgeHtml = '<span class="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-600 text-white"><i class="fa-solid fa-paper-plane me-1"></i>Engineer Reply (Outbound)</span>';
+        } else if (isAvaya) {
+          headerColor = 'text-sky-800 bg-sky-50/70 border-sky-100';
+          badgeHtml = '<span class="px-2 py-0.5 rounded text-[11px] font-bold bg-sky-600 text-white"><i class="fa-solid fa-inbox me-1"></i>Avaya TAC (Inbound)</span>';
+        }
+
+        const dateStr = formatDate(msg.date);
+        const relTime = formatRelativeTime(msg.date);
+        const cleanBody = rawBody.replace(/📤\s*\u0e40\u0e23\u0e32\u0e15\u0e2d\u0e1a\u0e01\u0e25\u0e31\u0e1a/g, '📤 Engineer Reply');
+
+        card.innerHTML = `
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3 mb-3">
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-bold text-xs text-slate-600">
+                ${(msg.author || 'S').charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <div class="font-semibold text-sm text-slate-900">${escapeHtml(msg.author || 'Support')}</div>
+                ${msg.email_from ? `<div class="text-[11px] text-slate-400 font-mono">${escapeHtml(msg.email_from)}</div>` : ''}
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+              ${badgeHtml}
+              <div class="text-xs text-slate-400" title="${dateStr}">
+                <i class="fa-regular fa-clock me-1"></i>${relTime || dateStr}
+              </div>
+            </div>
+          </div>
+
+          <div class="prose prose-sm max-w-none text-slate-800 chatter-html overflow-x-auto leading-relaxed">
+            ${cleanBody}
+          </div>
+        `;
+
+        listEl.appendChild(card);
+      });
+    }
+
+    let currentLoadedTicketId = null;
+
+    async function changeSiteEngineer(val) {
+      if (!currentLoadedTicketId) return;
+      try {
+        const res = await fetch('/helpdesk/api/update_ticket', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: currentLoadedTicketId,
+            site_engineer: val
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          const badge = document.getElementById('siteEngSaved');
+          if (badge) {
+            badge.classList.remove('opacity-0');
+            setTimeout(() => badge.classList.add('opacity-0'), 2500);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to update site engineer:', e);
+      }
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // Auto-load on page ready
+    document.addEventListener('DOMContentLoaded', () => {
+      loadTicketData();
+      // Auto-refresh every 60 seconds
+      setInterval(() => {
+        loadTicketData();
+      }, 60000);
+    });
+  </script>
+</body>
+</html>

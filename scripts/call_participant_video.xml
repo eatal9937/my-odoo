@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="discuss.CallParticipantVideo">
+        <div class="position-relative w-100 h-100 d-flex align-items-center justify-content-center overflow-hidden rounded-1">
+            <video class="w-100 h-100 cursor-pointer"
+                style="object-fit: contain; isolation: isolate; -webkit-backface-visibility: hidden; backface-visibility: hidden; transform: translateZ(0); -webkit-transform: translateZ(0);"
+                t-att-class="{ 'o-inset': props.inset }"
+                t-att-type="props.type"
+                playsinline=""
+                webkit-playsinline=""
+                autoplay=""
+                muted=""
+                t-on-click.stop="forcePlay"
+                t-on-touchstart.stop="forcePlay"
+                t-on-loadedmetadata="onVideoLoadedMetaData"
+                t-ref="root"
+            />
+            <button t-if="state.isPaused and state.hasTrack"
+                t-on-click.stop="forcePlay"
+                t-on-touchstart.stop="forcePlay"
+                class="btn btn-warning btn-sm position-absolute top-50 start-50 translate-middle z-index-2 shadow-lg rounded-pill px-3 py-2 fw-bold"
+                style="pointer-events: auto; opacity: 0.95;">
+                <i class="fa fa-play me-1"/> แตะเพื่อแสดงภาพ
+            </button>
+            <span class="position-absolute bottom-0 start-0 m-1 px-1 rounded text-white bg-dark opacity-75 small"
+                style="font-size: 10px; pointer-events: none; z-index: 3;"
+                t-esc="state.debugInfo"
+            />
+        </div>
+    </t>
+</templates>

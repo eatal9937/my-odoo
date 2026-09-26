@@ -118,6 +118,26 @@ class HelpdeskTicketPro(models.Model):
     avaya_status = fields.Char(string='Avaya Status', tracking=True, default='Assigned')
     avaya_portal_url = fields.Char(string='Avaya Portal URL', compute='_compute_avaya_portal_url')
     avaya_date_reported = fields.Char(string='Avaya Date Reported / Opened', tracking=True)
+    SITE_ENGINEER_SELECTION = [
+        ('Phongthep Phimthong', 'Phongthep Phimthong (Captain)'),
+        ('Beer PRIORITY', 'Beer PRIORITY (เบียร์)'),
+        ('Chalerm', 'Chalerm (เฉลิม)'),
+        ('Jackie Chan Nakama', 'Jackie Chan Nakama (แจ็คกี้)'),
+        ('kai_amnat', 'kai_amnat (ไก่)'),
+        ('Nueng', 'Nueng (หนึ่ง)'),
+        ('Romance', 'Romance (โรม)'),
+        ('Surawat🐸6915', 'Surawat🐸6915 (กบ)'),
+        ('tohtoro Qool @60', 'tohtoro Qool @60 (ต่อ)'),
+        ('Toh Phakdee', 'Toh Phakdee (โต้ง)'),
+        ('Ton', 'Ton (ต้น)'),
+        ('Other', 'Other (อื่นๆ)'),
+    ]
+    site_engineer = fields.Selection(
+        selection=SITE_ENGINEER_SELECTION,
+        string='Site Engineer / ผู้ดูแลไซต์',
+        default='Phongthep Phimthong',
+        tracking=True
+    )
     avaya_contact_name = fields.Char(string='Avaya Contact Name', tracking=True)
     avaya_contact_phone = fields.Char(string='Avaya Contact Phone', tracking=True)
     avaya_contact_email = fields.Char(string='Avaya Contact Email', tracking=True)

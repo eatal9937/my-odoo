@@ -26,6 +26,7 @@
                         </group>
                         <group string="Assignment &amp; Urgency">
                             <field name="user_id" widget="many2one_avatar_user"/>
+                            <field name="site_engineer" string="Site Engineer / ผู้ดูแลไซต์"/>
                             <field name="priority" widget="priority"/>
                             <field name="deadline"/>
                             <field name="is_avaya_support" widget="boolean_toggle"/>
@@ -130,7 +131,8 @@
                 <field name="avaya_sr_number" string="Avaya SR#" optional="show"/>
                 <field name="category_id" optional="show"/>
                 <field name="tag_ids" widget="many2many_tags" options="{'color_field': 'color'}" optional="show"/>
-                <field name="user_id" string="ผู้รับผิดชอบ" widget="many2one_avatar_user"/>
+                <field name="site_engineer" string="Site Engineer / ผู้ดูแลไซต์" optional="show"/>
+                <field name="user_id" string="ผู้รับผิดชอบ" widget="many2one_avatar_user" optional="hide"/>
                 <field name="priority" string="ความด่วน" widget="priority" optional="show"/>
                 <field name="deadline" string="วันครบกำหนด" widget="remaining_days" optional="show"/>
                 <field name="state" string="สถานะ" widget="badge" 
