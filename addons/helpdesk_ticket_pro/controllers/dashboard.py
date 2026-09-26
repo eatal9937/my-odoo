@@ -417,6 +417,11 @@ class HelpdeskDashboardController(http.Controller):
         
         # If not cached or ticket has updated, compute Cloud AI synthesis and save
         if not cached or cached.get("_cache_key") != cache_key:
+            if rule_summary.get("_lock_rule"):
+                cache[str(ticket.id)] = rule_summary
+                _save_ai_cache(cache)
+                return rule_summary
+
             latest_msg = content_msgs[0] if content_msgs else {}
             fresh_content = _extract_fresh_reply_text(latest_msg.get("body", "") or ticket.description or "")
             sender = latest_msg.get("author", "") or ticket.avaya_contact_name or "Avaya Support"
@@ -457,7 +462,7 @@ class HelpdeskDashboardController(http.Controller):
                     if "ลูกค้า" in owner_str or "customer" in owner_str or "user" in owner_str:
                         rule_summary["badge_color"] = "bg-purple-500/20 text-purple-300 border-purple-500/30"
                         rule_summary["stage_key"] = "awaiting_customer"
-                    elif rule_summary.get("action_priority") == 1 or "jads" in owner_str or "phongthep" in owner_str:
+                    elif rule_summary.get("action_priority") == 1 or any(k in owner_str for k in ["jads", "phongthep", "kai", "ไก่", "engineer", "site"]):
                         rule_summary["badge_color"] = "bg-amber-400/20 text-amber-300 border-amber-400/30"
                         rule_summary["stage_key"] = "action_required"
                     else:
@@ -595,6 +600,7 @@ class HelpdeskDashboardController(http.Controller):
                 (["asmita", "sharma"], "Asmita Sharma"),
                 (["vinaya", "kumar"], "Vinaya Kumar"),
                 (["renjoy", "henry"], "Renjoy Henry"),
+                (["mitch", "zhang", "jian"], "Mitch Zhang"),
             ]
             for keys, name in known_map:
                 if any(k in fresh_lower for k in keys) or any(k in raw_body.lower() for k in keys):
@@ -603,6 +609,118 @@ class HelpdeskDashboardController(http.Controller):
 
         eng_disp_th = f"วิศวกร Avaya ({detected_eng})" if detected_eng else "วิศวกร Avaya TAC"
         eng_disp_en = f"Avaya Engineer ({detected_eng})" if detected_eng else "Avaya TAC Engineer"
+
+        # Dynamically determine internal site engineer display
+        eng_raw = getattr(ticket, "site_engineer", None) or (ticket.user_id.name if ticket.user_id else "") or ""
+        eng_raw_lower = eng_raw.lower()
+        if "kai" in eng_raw_lower:
+            site_eng_th = "พี่ไก่ อำนาจ (kai_amnat)"
+            site_eng_en = "Kai Amnat (Site Engineer)"
+        elif "beer" in eng_raw_lower:
+            site_eng_th = "วิศวกร JADS (Beer)"
+            site_eng_en = "JADS Engineer (Beer)"
+        elif "chalerm" in eng_raw_lower:
+            site_eng_th = "วิศวกร JADS (เฉลิม)"
+            site_eng_en = "JADS Engineer (Chalerm)"
+        elif "jackie" in eng_raw_lower:
+            site_eng_th = "วิศวกร JADS (แจ็คกี้)"
+            site_eng_en = "JADS Engineer (Jackie)"
+        elif "nueng" in eng_raw_lower:
+            site_eng_th = "วิศวกร JADS (หนึ่ง)"
+            site_eng_en = "JADS Engineer (Nueng)"
+        elif "romance" in eng_raw_lower:
+            site_eng_th = "วิศวกร JADS (โรม)"
+            site_eng_en = "JADS Engineer (Romance)"
+        elif "surawat" in eng_raw_lower:
+            site_eng_th = "วิศวกร JADS (Surawat)"
+            site_eng_en = "JADS Engineer (Surawat)"
+        elif "toh" in eng_raw_lower:
+            site_eng_th = "วิศวกร JADS (โต้ง/ต่อ)"
+            site_eng_en = "JADS Engineer (Toh)"
+        elif "ton" in eng_raw_lower:
+            site_eng_th = "วิศวกร JADS (ต้น)"
+            site_eng_en = "JADS Engineer (Ton)"
+        elif "phongthep" in eng_raw_lower:
+            site_eng_th = "วิศวกร JADS (Phongthep)"
+            site_eng_en = "JADS Engineer (Phongthep)"
+        elif eng_raw:
+            site_eng_th = f"วิศวกรผู้ดูแล ({eng_raw})"
+            site_eng_en = f"Site Engineer ({eng_raw})"
+        else:
+            site_eng_th = "วิศวกร JADS"
+            site_eng_en = "JADS Engineering"
+
+        # PRIORITY 0: Avaya TAC SR Closed but Internal Action Required / Maintenance Window Pending!
+        # (e.g. Mitch Zhang diagnosed JBoss SWAP exhaustion from rrdcached -> Known issue fixed in SM 10.1.3.4+)
+        all_bodies_str = " ".join([(m.get("body") or "") for m in content_msgs]).lower()
+        is_tac_closed = (
+            any(k in fresh_lower or k in full_text for k in [
+                "sr closed", "sr is closed", "case closed", "ticket closed", "closed notification"
+            ]) or
+            getattr(ticket, "avaya_status", "").lower() in ["closed", "solved"] or
+            any("sr closed" in (m.get("body", "") or "").lower() for m in content_msgs[:2])
+        )
+
+        if is_tac_closed and ticket.state not in ["solved", "closed"]:
+            p_name = ticket.avaya_product or "System"
+            cust_name = ticket.partner_id.name or ticket.avaya_customer_name or "ลูกค้า"
+            
+            # Check for RCA / Upgrade / Known Issue in conversation history
+            has_upgrade_req = any(k in all_bodies_str for k in [
+                "upgrad", "known issue", "patch", "workaround", "permanent fix", "swap exhaustion", "rrdcached"
+            ])
+            
+            if has_upgrade_req:
+                if "swap" in all_bodies_str or "rrdcached" in all_bodies_str:
+                    action_th = f"{site_eng_th}: ประสานงาน {cust_name} เพื่อนัดหมาย Maintenance Window อัปเกรด SMGR/SM เป็นเวอร์ชัน 10.1.3.4+ เพื่อแก้ปัญหา JBoss SWAP Crash ถาวร และเฝ้าระวัง SWAP ชั่วคราว"
+                    action_en = f"{site_eng_en}: Coordinate Maintenance Window with {cust_name} to upgrade SMGR/SM to 10.1.3.4+ (fixes JBoss SWAP crash from rrdcached) and monitor SWAP."
+                    title_th = f"Avaya TAC สรุป RCA ปิดเคสแล้ว / รอ {site_eng_th} นัดหมายเปิด Window อัปเกรดระบบ"
+                    title_en = f"Avaya TAC SR Closed with RCA / Pending JADS Upgrade Window ({p_name})"
+                    status_th = f"Avaya TAC ({detected_eng or 'Mitch Zhang'}) ยืนยันผลการวิเคราะห์เป็น Known Issue (JBoss SWAP Crash จาก rrdcached) ซึ่งมี Fix ถาวรในเวอร์ชัน 10.1.3.4+ ทาง Avaya TAC ปิดตั๋วแล้ว แต่ทีม JADS ต้องเปิด Maintenance Window เพื่ออัปเกรดระบบให้ลูกค้า"
+                    status_en = f"Avaya TAC confirmed known issue (JBoss SWAP exhaustion from rrdcached). TAC closed SR with fix in 10.1.3.4+. JADS must schedule Maintenance Window."
+                else:
+                    action_th = f"{site_eng_th}: ประสานงาน {cust_name} เพื่อวางแผน Maintenance Window อัปเกรด/แพตช์ระบบตามคำแนะนำของ Avaya TAC"
+                    action_en = f"{site_eng_en}: Coordinate Maintenance Window with {cust_name} for system upgrade/patch recommended by Avaya TAC."
+                    title_th = f"Avaya TAC ปิดเคสแล้ว / รอ {site_eng_th} นัดหมายเปิด Window ดำเนินการ"
+                    title_en = f"Avaya TAC SR Closed / Pending Customer Maintenance Window ({p_name})"
+                    status_th = f"Avaya TAC ได้ระบุแนวทางแก้ไขและปิดเคสในฝั่ง TAC แล้ว ทีม JADS ต้องวางแผน Maintenance Window และดำเนินการต่อไป"
+                    status_en = f"Avaya TAC provided resolution and closed SR. JADS must plan customer maintenance window."
+
+                return {
+                    "stage_key": "action_required",
+                    "badge_color": "bg-amber-400/20 text-amber-300 border-amber-400/30",
+                    "stage_badge": {"en": "Action Required (Upgrade Window)", "th": "รอ Action ภายใน (รอเปิด Window)"},
+                    "stage_title": {"en": title_en, "th": title_th},
+                    "status_summary": {"en": status_en, "th": status_th},
+                    "next_action": {"en": action_en, "th": action_th},
+                    "action_owner": {"en": site_eng_en, "th": site_eng_th},
+                    "latest_note": {
+                        "en": f"Avaya TAC closed SR. RCA: Upgrade to 10.1.3.4+ required. Assigned to {site_eng_en}.",
+                        "th": f"Avaya ปิดเคสแล้ว แจ้ง RCA ต้องอัปเกรด SMGR/SM 10.1.3.4+ มอบหมาย {site_eng_th} ติดตามนัดหมาย"
+                    },
+                    "action_priority": 1,
+                    "_lock_rule": True,
+                    "source": "Hybrid AI (Instant Rule Engine)"
+                }
+            else:
+                return {
+                    "stage_key": "action_required",
+                    "badge_color": "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
+                    "stage_badge": {"en": "TAC Closed (Verify)", "th": "TAC ปิดเคส (รอตรวจรับ)"},
+                    "stage_title": {"en": "Avaya TAC Closed SR / Verify with Customer", "th": "Avaya TAC ปิดเคสแล้ว / รอตรวจรับงานกับลูกค้า"},
+                    "status_summary": {
+                        "en": f"Avaya TAC has resolved and closed the Service Request. {site_eng_en} to verify resolution with customer.",
+                        "th": f"ฝ่ายสนับสนุน Avaya TAC แก้ไขปัญหาและปิดตั๋วบริการแล้ว อยู่ระหว่างให้ {site_eng_th} ยืนยันผลกับลูกค้า"
+                    },
+                    "next_action": {
+                        "en": f"{site_eng_en} to confirm resolution with customer and close internal ticket.",
+                        "th": f"{site_eng_th} ตรวจสอบความเรียบร้อยกับลูกค้าและปิดตั๋วงานภายใน"
+                    },
+                    "action_owner": {"en": site_eng_en, "th": site_eng_th},
+                    "latest_note": {"en": "SR closed by Avaya TAC. Awaiting customer confirmation.", "th": "Avaya TAC ปิดเคสแล้ว รอยืนยันกับลูกค้า"},
+                    "action_priority": 1,
+                    "source": "Hybrid AI (Instant Rule Engine)"
+                }
 
         # PRIORITY 1: Outbound reply sent by JADS engineer (Ball is in Vendor's court or Meeting Confirmed!)
         if is_outbound:
@@ -1351,7 +1469,10 @@ class HelpdeskDashboardController(http.Controller):
 
         # Update status/severity if changed
         update_vals = {}
-        if data.get("avaya_status") and data.get("avaya_status") != ticket.avaya_status:
+        subj_check = (data.get("subject") or "").lower()
+        if "sr closed" in subj_check or "closed:" in subj_check:
+            update_vals["avaya_status"] = "Closed"
+        elif data.get("avaya_status") and data.get("avaya_status") != ticket.avaya_status:
             update_vals["avaya_status"] = data["avaya_status"]
         if data.get("avaya_severity") and data.get("avaya_severity") != ticket.avaya_severity:
             update_vals["avaya_severity"] = data["avaya_severity"]
