@@ -3,7 +3,11 @@ import json
 import os
 import re
 
-TEAM_FILE = "/home/captain/team_members.json"
+TEAM_FILE = os.environ.get("TEAM_FILE", "/home/captain/team_members.json")
+if not os.path.exists(TEAM_FILE):
+    local_path = os.path.join(os.path.dirname(__file__), "team_members.json")
+    if os.path.exists(local_path):
+        TEAM_FILE = local_path
 
 def load_members():
     if os.path.exists(TEAM_FILE):

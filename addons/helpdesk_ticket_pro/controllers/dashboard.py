@@ -640,9 +640,9 @@ class HelpdeskDashboardController(http.Controller):
         elif "ton" in eng_raw_lower:
             site_eng_th = "วิศวกร JADS (ต้น)"
             site_eng_en = "JADS Engineer (Ton)"
-        elif "phongthep" in eng_raw_lower:
-            site_eng_th = "วิศวกร JADS (Phongthep)"
-            site_eng_en = "JADS Engineer (Phongthep)"
+        elif any(k in eng_raw_lower for k in ["phongthep", "captain", "phongthe", "แคป"]):
+            site_eng_th = "วิศวกร JADS (Phongthep / Captain_Phongthe☺️😆)"
+            site_eng_en = "JADS Engineer (Phongthep / Captain_Phongthe)"
         elif eng_raw:
             site_eng_th = f"วิศวกรผู้ดูแล ({eng_raw})"
             site_eng_en = f"Site Engineer ({eng_raw})"

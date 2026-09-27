@@ -119,7 +119,7 @@ class HelpdeskTicketPro(models.Model):
     avaya_portal_url = fields.Char(string='Avaya Portal URL', compute='_compute_avaya_portal_url')
     avaya_date_reported = fields.Char(string='Avaya Date Reported / Opened', tracking=True)
     SITE_ENGINEER_SELECTION = [
-        ('Phongthep Phimthong', 'Phongthep Phimthong (Captain)'),
+        ('Phongthep Phimthong', 'Captain_Phongthe☺️😆 (Phongthep Phimthong)'),
         ('Beer PRIORITY', 'Beer PRIORITY (เบียร์)'),
         ('Chalerm', 'Chalerm (เฉลิม)'),
         ('Jackie Chan Nakama', 'Jackie Chan Nakama (แจ็คกี้)'),

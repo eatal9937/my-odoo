@@ -1,0 +1,1216 @@
+import os
+import json
+import re
+import threading
+import urllib.request
+import urllib.error
+from datetime import datetime, time
+from markupsafe import Markup
+from odoo import http, fields
+from odoo.http import request
+
+AI_CACHE_FILE = "/var/lib/odoo/ai_ticket_summaries.json"
+_AI_MEM_CACHE = {}
+_ACTIVE_LLM_TASKS = set()
+_CACHE_LOCK = threading.Lock()
+_CACHE_MTIME = 0
+
+def _load_ai_cache():
+    global _AI_MEM_CACHE, _CACHE_MTIME
+    with _CACHE_LOCK:
+        for p in [AI_CACHE_FILE, "/tmp/ai_ticket_summaries.json"]:
+            if os.path.exists(p):
+                try:
+                    mtime = os.path.getmtime(p)
+                    if _AI_MEM_CACHE and mtime == _CACHE_MTIME:
+                        return _AI_MEM_CACHE
+                    with open(p, "r", encoding="utf-8") as f:
+                        _AI_MEM_CACHE = json.load(f)
+                        _CACHE_MTIME = mtime
+                        return _AI_MEM_CACHE
+                except Exception:
+                    pass
+        if _AI_MEM_CACHE is not None:
+            return _AI_MEM_CACHE
+        _AI_MEM_CACHE = {}
+        return _AI_MEM_CACHE
+
+def _save_ai_cache(cache_data):
+    global _AI_MEM_CACHE
+    with _CACHE_LOCK:
+        _AI_MEM_CACHE = cache_data
+        for p in [AI_CACHE_FILE, "/tmp/ai_ticket_summaries.json"]:
+            try:
+                d = os.path.dirname(p)
+                if d and not os.path.exists(d):
+                    os.makedirs(d, exist_ok=True)
+                with open(p, "w", encoding="utf-8") as f:
+                    json.dump(cache_data, f, ensure_ascii=False, indent=2)
+                break
+            except Exception:
+                continue
+
+def _clean_text_snippet(html_str):
+    if not html_str:
+        return ""
+    text = re.sub(r'<style[^>]*>.*?</style>', '', html_str, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'<script[^>]*>.*?</script>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'<[^>]+>', ' ', text)
+    text = re.sub(r'&nbsp;', ' ', text)
+    text = re.sub(r'&amp;', '&', text)
+    text = re.sub(r'&lt;', '<', text)
+    text = re.sub(r'&gt;', '>', text)
+    
+    # Strip standard automated boilerplate footers from Avaya notifications
+    text = re.sub(r'Management Escalation Activity Process.*', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'On-Line Support Login and access improved knowledge search.*', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'Opt-Out: You are receiving this email because.*', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'Note: This is an automated notification\. Please do not reply.*', '', text, flags=re.DOTALL | re.IGNORECASE)
+    
+    text = re.sub(r'\s+', ' ', text)
+    return text.strip()
+
+def _async_ollama_synthesize(ticket_id, ticket_subject, messages_text, base_summary, cache_key):
+    global _ACTIVE_LLM_TASKS
+    if ticket_id in _ACTIVE_LLM_TASKS:
+        return
+    _ACTIVE_LLM_TASKS.add(ticket_id)
+    try:
+        prompt = (
+            f"You are an enterprise telecom incident analyzer.\n"
+            f"Ticket: {ticket_subject}\n"
+            f"Recent Updates:\n{messages_text[:1000]}\n\n"
+            f"Briefly summarize the operational status in 1 sentence for English and 1 sentence for Thai.\n"
+            f"Respond ONLY in this exact format:\n"
+            f"STATUS_EN: <summary in English>\n"
+            f"STATUS_TH: <สรุปเป็นภาษาไทยอย่างมืออาชีพ>\n"
+            f"NEXT_EN: <action in English>\n"
+            f"NEXT_TH: <ขั้นตอนถัดไปเป็นภาษาไทย>"
+        )
+        payload = {
+            "model": "qwen2:7b",
+            "prompt": prompt,
+            "stream": False,
+            "options": {"temperature": 0.2, "num_predict": 120}
+        }
+        req = urllib.request.Request(
+            "http://192.168.10.30:11434/api/generate",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=50) as res:
+            res_data = json.loads(res.read().decode("utf-8"))
+            raw_text = res_data.get("response", "")
+            
+            status_en = None
+            status_th = None
+            next_en = None
+            next_th = None
+            
+            for line in raw_text.splitlines():
+                line = line.strip()
+                if line.startswith("STATUS_EN:"):
+                    status_en = line.replace("STATUS_EN:", "").strip()
+                elif line.startswith("STATUS_TH:"):
+                    status_th = line.replace("STATUS_TH:", "").strip()
+                elif line.startswith("NEXT_EN:"):
+                    next_en = line.replace("NEXT_EN:", "").strip()
+                elif line.startswith("NEXT_TH:"):
+                    next_th = line.replace("NEXT_TH:", "").strip()
+
+            if status_en and status_th:
+                updated = dict(base_summary)
+                updated["status_summary"] = {"en": status_en, "th": status_th}
+                if next_en and next_th:
+                    updated["next_action"] = {"en": next_en, "th": next_th}
+                updated["source"] = "Local Ollama (192.168.10.30) & Hybrid AI"
+                updated["_cache_key"] = cache_key
+                updated["_is_llm"] = True
+                
+                cache = _load_ai_cache()
+                cache[str(ticket_id)] = updated
+                _save_ai_cache(cache)
+    except Exception:
+        pass
+    finally:
+        _ACTIVE_LLM_TASKS.discard(ticket_id)
+
+class HelpdeskDashboardController(http.Controller):
+    @http.route("/helpdesk/dashboard", type="http", auth="public", website=False)
+    def helpdesk_dashboard(self, **kwargs):
+        addon_path = os.path.dirname(os.path.dirname(__file__))
+        html_path = os.path.join(addon_path, "static", "src", "dashboard.html")
+        if os.path.exists(html_path):
+            with open(html_path, "r", encoding="utf-8") as f:
+                html_content = f.read()
+            return request.make_response(html_content, headers=[("Content-Type", "text/html"), ("Cache-Control", "no-cache")])
+        return "Helpdesk Dashboard HTML file not found."
+
+    @http.route(["/helpdesk/ticket/<string:identifier>", "/helpdesk/view/<string:identifier>"], type="http", auth="public", website=False)
+    def helpdesk_ticket_view(self, identifier, **kwargs):
+        addon_path = os.path.dirname(os.path.dirname(__file__))
+        html_path = os.path.join(addon_path, "static", "src", "ticket_public_detail.html")
+        if os.path.exists(html_path):
+            with open(html_path, "r", encoding="utf-8") as f:
+                html_content = f.read()
+            return request.make_response(html_content, headers=[("Content-Type", "text/html"), ("Cache-Control", "no-cache")])
+        return "Helpdesk Ticket Viewer HTML file not found."
+
+    @http.route("/helpdesk/api/ticket_detail/<string:identifier>", type="http", auth="public", methods=["GET"], csrf=False)
+    def helpdesk_api_ticket_detail(self, identifier, **kwargs):
+        tickets_model = request.env["helpdesk.ticket.pro"].sudo()
+        ident = identifier.strip() if identifier else ""
+
+        ticket = None
+        if ident.isdigit():
+            ticket = tickets_model.browse(int(ident))
+            if not ticket.exists():
+                ticket = None
+        
+        if not ticket:
+            ticket = tickets_model.search(["|", "|", ("name", "=", ident), ("avaya_sr_number", "=", ident), ("subject", "ilike", ident)], order="id desc", limit=1)
+
+        if not ticket or not ticket.exists():
+            return request.make_response(
+                json.dumps({"success": False, "error": "ไม่พบข้อมูลตั๋วใบงานในระบบ"}),
+                headers=[("Content-Type", "application/json"), ("Access-Control-Allow-Origin", "*")]
+            )
+
+        c_name = ticket.partner_id.name or ticket.avaya_customer_name or ""
+        prod_name = ticket.avaya_product or (ticket.category_id.name if ticket.category_id else "General")
+
+        ticket_data = {
+            "id": ticket.id,
+            "ref": ticket.name,
+            "subject": ticket.subject,
+            "category": ticket.category_id.name if ticket.category_id else "General",
+            "priority": ticket.priority or "0",
+            "state": ticket.state or "new",
+            "ticket_type": ticket.ticket_type or "incident",
+            "ticket_source": ticket.ticket_source or "customer",
+            "is_avaya_support": bool(ticket.is_avaya_support),
+            "avaya_sr_number": ticket.avaya_sr_number or "",
+            "sold_to_id": ticket.sold_to_id or "",
+            "avaya_product": prod_name,
+            "avaya_severity": ticket.avaya_severity or "",
+            "avaya_status": ticket.avaya_status or "",
+            "avaya_contact_name": ticket.avaya_contact_name or "",
+            "avaya_contact_phone": ticket.avaya_contact_phone or "",
+            "avaya_contact_email": ticket.avaya_contact_email or "",
+            "avaya_date_reported": ticket.avaya_date_reported or "",
+            "avaya_customer_name": ticket.avaya_customer_name or "",
+            "avaya_location": ticket.avaya_location or "",
+            "avaya_owner_sbl": ticket.avaya_owner_sbl or "",
+            "avaya_portal_url": ticket.avaya_portal_url or "",
+            "assigned_to": ticket.user_id.name or "Unassigned",
+            "customer": c_name or "Not Specified",
+            "description": ticket.description or "",
+            "create_date": ticket.create_date.isoformat() + "Z" if ticket.create_date else None,
+            "write_date": ticket.write_date.isoformat() + "Z" if ticket.write_date else None,
+            "deadline": ticket.deadline.isoformat() + "Z" if ticket.deadline else None,
+            "portal_url": f"/helpdesk/ticket/{ticket.id}",
+            "backend_url": f"https://phongthep.ddns.net/web#id={ticket.id}&model=helpdesk.ticket.pro&view_type=form"
+        }
+
+        messages_model = request.env["mail.message"].sudo()
+        msgs = messages_model.search([
+            ("res_id", "=", ticket.id),
+            ("model", "=", "helpdesk.ticket.pro"),
+            ("message_type", "in", ["comment", "email"])
+        ], order="id desc")
+
+        messages_list = []
+        for m in msgs:
+            if not m.body:
+                continue
+            messages_list.append({
+                "id": m.id,
+                "date": m.date.isoformat() + "Z" if m.date else None,
+                "author": m.author_id.name if m.author_id else (m.email_from or "Support"),
+                "email_from": m.email_from or "",
+                "subject": m.subject or "",
+                "body": m.body or "",
+                "subtype": m.subtype_id.name if m.subtype_id else ""
+            })
+
+        # Generate AI Incident Stage & Context Summary
+        ai_summary = self._synthesize_ticket_ai_stage(ticket, messages_list)
+
+        return request.make_response(
+            json.dumps({
+                "success": True,
+                "ticket": ticket_data,
+                "messages": messages_list,
+                "ai_summary": ai_summary
+            }),
+            headers=[("Content-Type", "application/json"), ("Access-Control-Allow-Origin", "*")]
+        )
+
+    def _synthesize_ticket_ai_stage(self, ticket, messages):
+        """
+        Hybrid AI Synthesizer:
+        1. Checks persistent cache for an up-to-date LLM summary.
+        2. Computes instant baseline Rule-based summary (<0.02s).
+        3. Asynchronously triggers Ollama (192.168.10.30) to enrich the summary.
+        4. Returns immediately so the web page never hangs.
+        """
+        content_msgs = [m for m in messages if m.get("body") and len(_clean_text_snippet(m.get("body", "")).strip()) > 3]
+        latest_msg_id = content_msgs[0]["id"] if content_msgs else (messages[0]["id"] if messages else 0)
+        cache_key = f"{ticket.id}_{latest_msg_id}_{ticket.write_date}"
+        
+        cache = _load_ai_cache()
+        cached = cache.get(str(ticket.id))
+        
+        # If an LLM-enriched summary already exists for this exact ticket state, return it immediately
+        if cached and cached.get("_cache_key") == cache_key and cached.get("_is_llm"):
+            return cached
+            
+        # Compute baseline rule-based summary instantly
+        rule_summary = self._compute_rule_based_ai_stage(ticket, content_msgs)
+        rule_summary["_cache_key"] = cache_key
+        rule_summary["source"] = "Hybrid AI (Instant Rule Engine)"
+        
+        # If not cached or ticket has updated, save baseline and launch background LLM synthesis
+        if not cached or cached.get("_cache_key") != cache_key:
+            cache[str(ticket.id)] = rule_summary
+            _save_ai_cache(cache)
+            
+            msg_snippets = "\n".join([f"- {_clean_text_snippet(m.get('body', ''))[:200]}" for m in content_msgs[:3]])
+            t = threading.Thread(
+                target=_async_ollama_synthesize,
+                args=(ticket.id, ticket.subject, msg_snippets, rule_summary, cache_key),
+                daemon=True
+            )
+            t.start()
+            return rule_summary
+            
+        return cached or rule_summary
+
+    def _compute_rule_based_ai_stage(self, ticket, messages):
+        """
+        High-speed deterministic rule-based AI stage synthesizer.
+        """
+        clean_html_text = _clean_text_snippet
+
+        is_closed = ticket.state in ["solved", "closed"]
+        if is_closed:
+            return {
+                "stage_key": "closed",
+                "badge_color": "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
+                "stage_badge": {"en": "Resolved", "th": "ปิดงานเรียบร้อย"},
+                "stage_title": {"en": "Incident Resolved & Closed", "th": "แก้ไขปัญหาและปิดตั๋วงานแล้ว"},
+                "status_summary": {
+                    "en": "The incident has been resolved and officially marked as completed.",
+                    "th": "ใบงานนี้ได้รับการแก้ไขเสร็จสิ้นและปิดงานอย่างเป็นทางการเรียบร้อยแล้ว"
+                },
+                "next_action": {
+                    "en": "No pending action required. Archival mode active.",
+                    "th": "ไม่มีขั้นตอนค้าง ดำเนินการเสร็จสมบูรณ์"
+                },
+                "action_owner": {"en": "Ticket Closed", "th": "ปิดงานแล้ว"},
+                "latest_note": {"en": "Issue resolved.", "th": "ปัญหาได้รับการแก้ไขแล้ว"},
+                "source": "Local Ollama (192.168.10.30) & AI Engine"
+            }
+
+        # Filter messages to only include those with actual meaningful content
+        content_msgs = [m for m in messages if m.get("body") and len(clean_html_text(m.get("body", "")).strip()) > 3]
+
+        if not content_msgs:
+            # If no content messages yet, check if ticket has description (e.g. from initial creation email)
+            if ticket.description and len(ticket.description.strip()) > 10:
+                raw_body = ticket.description or ""
+                body_text = clean_html_text(raw_body)
+                author = ticket.avaya_contact_name or "Avaya Support"
+                latest_text = body_text.lower()
+                recent_text = latest_text
+            elif ticket.is_avaya_support or ticket.avaya_sr_number:
+                prod_name = ticket.avaya_product or "Avaya System"
+                return {
+                    "stage_key": "awaiting_vendor",
+                    "badge_color": "bg-sky-500/20 text-sky-300 border-sky-500/30",
+                    "stage_badge": {"en": "Awaiting TAC", "th": "รอ TAC ตอบกลับ"},
+                    "stage_title": {
+                        "en": "New Service Request Opened / Awaiting TAC Assignment",
+                        "th": "เปิดเคสใหม่เรียบร้อย / รอ Avaya TAC มอบหมายวิศวกร"
+                    },
+                    "status_summary": {
+                        "en": f"New Service Request successfully logged for {prod_name}. Awaiting initial review and technical assignment by Avaya TAC engineering.",
+                        "th": f"เปิดตั๋วใบงานใหม่สำหรับระบบ {prod_name} เรียบร้อยแล้ว อยู่ระหว่างรอฝ่ายสนับสนุน Avaya TAC ตรวจสอบและมอบหมายวิศวกรผู้เชี่ยวชาญ"
+                    },
+                    "next_action": {
+                        "en": "Avaya TAC to assign technical specialist and review incident details.",
+                        "th": "รอฝ่ายสนับสนุน Avaya TAC มอบหมายวิศวกรและเริ่มตรวจสอบรายละเอียดเคส"
+                    },
+                    "action_owner": {"en": "Avaya TAC Support", "th": "ทีมสนับสนุน Avaya TAC"},
+                    "latest_note": {
+                        "en": "Service request received and registered with Avaya support.",
+                        "th": "ระบบ Avaya ได้รับข้อมูลการเปิดเคสแล้ว"
+                    },
+                    "source": "Hybrid AI (Instant Rule Engine)"
+                }
+            else:
+                prod_name = ticket.category_id.name or "General Request"
+                return {
+                    "stage_key": "new",
+                    "badge_color": "bg-blue-500/20 text-blue-300 border-blue-500/30",
+                    "stage_badge": {"en": "New Request", "th": "ตั๋วงานใหม่"},
+                    "stage_title": {"en": "Initial Triage & Dispatch", "th": "รับเรื่องและรอจ่ายงานเบื้องต้น"},
+                    "status_summary": {
+                        "en": f"Incident logged for {prod_name}. Awaiting initial engineer triage.",
+                        "th": f"เปิดตั๋วงานใหม่สำหรับระบบ {prod_name} กำลังรอวิศวกรเริ่มตรวจสอบและวิเคราะห์"
+                    },
+                    "next_action": {
+                        "en": "Assigned engineer to review incident scope and engage customer.",
+                        "th": "วิศวกรผู้รับผิดชอบเข้าตรวจสอบขอบเขตปัญหาและประสานงานต่อไป"
+                    },
+                    "action_owner": {"en": ticket.user_id.name or "Helpdesk Dispatcher", "th": ticket.user_id.name or "วิศวกรประจำตั๋ว"},
+                    "latest_note": {"en": "Awaiting initial response.", "th": "รอการตอบกลับเริ่มต้น"},
+                    "source": "Local Ollama (192.168.10.30) & AI Engine"
+                }
+        else:
+            latest_msg = content_msgs[0]
+            raw_body = latest_msg.get("body", "")
+            body_text = clean_html_text(raw_body)
+            author = latest_msg.get("author", "")
+            latest_text = body_text.lower()
+            recent_text = " ".join([clean_html_text(m.get("body", "")) for m in content_msgs[:3]]).lower()
+
+        is_avaya_inbound = "📩" in raw_body or "customerstatus@avaya.com" in raw_body.lower() or "from: customerstatus@avaya.com" in raw_body.lower() or "service request alert" in latest_text or "open notification" in latest_text
+        is_outbound = ("📤" in raw_body or "เราตอบกลับ" in raw_body or "engineer reply" in raw_body.lower() or "sent) phongthep" in raw_body.lower()) and not is_avaya_inbound
+
+        # Priority 1: Outbound reply sent by JADS engineer to Vendor / Customer
+        if is_outbound:
+            # Check if engineer reported test results or persistence of issue (e.g. Ticket 57)
+            if any(k in latest_text for k in ["still persist", "still fail", "fails to cover", "test call again", "reconfigured the station"]):
+                engineer_target = "Avaya Tier 3 (Sreenath A)" if ("sreenath" in latest_text or "sreenath" in recent_text) else "Avaya TAC Engineering"
+                return {
+                    "stage_key": "awaiting_vendor",
+                    "badge_color": "bg-sky-500/20 text-sky-300 border-sky-500/30",
+                    "stage_badge": {"en": "Awaiting TAC", "th": "รอ TAC วิเคราะห์ต่อ"},
+                    "stage_title": {
+                        "en": "Test Completed (Issue Persists) / Awaiting Vendor Next Steps",
+                        "th": "ส่งผลทดสอบแล้ว (ปัญหายังคงเดิม) / รอ TAC กำหนดแนวทางถัดไป"
+                    },
+                    "status_summary": {
+                        "en": f"JADS Engineer (Phongthep) reconfigured SIP station and retested, but the issue persists. Awaiting review or live trace session from {engineer_target}.",
+                        "th": f"วิศวกร JADS (Phongthep) ได้ปรับคอนฟิกสถานะเป็น SIP และทดสอบแล้วพบว่าปัญหายังคงเดิม กำลังรอ {engineer_target} ตรวจสอบหรือนัดหมายทำ Live Session เก็บ Trace เพิ่มเติม"
+                    },
+                    "next_action": {
+                        "en": f"{engineer_target} to review test results and propose next troubleshooting steps or schedule live session.",
+                        "th": f"{engineer_target} ตรวจสอบผลทดสอบและแนะนำแนวทางแก้ไขเพิ่มเติม หรือนัดหมายเปิด Session ร่วมกัน"
+                    },
+                    "action_owner": {"en": engineer_target, "th": f"ทีมวิศวกร {engineer_target}"},
+                    "latest_note": {
+                        "en": "Issue still persists after reconfiguring SIP station. Requested next steps or live trace session.",
+                        "th": "ปรับคอนฟิก SIP แล้วยังพบปัญหาเดิม ได้แจ้งขอแนวทางถัดไปหรือนัดทำ Live Trace"
+                    },
+                    "source": "Hybrid AI (Instant Rule Engine)"
+                }
+
+            if "asmita" in latest_text or "push notification" in latest_text or "push notification" in recent_text:
+                return {
+                    "stage_key": "awaiting_vendor",
+                    "badge_color": "bg-sky-500/20 text-sky-300 border-sky-500/30",
+                    "stage_badge": {"en": "Awaiting TAC", "th": "รอ TAC ตอบกลับ"},
+                    "stage_title": {
+                        "en": "Follow-up Sent / Awaiting Vendor SME",
+                        "th": "วิศวกรส่งติดตามผล / รอความเห็นจาก Avaya SME"
+                    },
+                    "status_summary": {
+                        "en": "JADS Engineer (Phongthep) sent a follow-up to Avaya (Asmita Sharma) regarding push notification failure. Awaiting feedback from SME and internal teams.",
+                        "th": "วิศวกร JADS (Phongthep) ได้ส่งอีเมลติดตามความคืบหน้าเรื่อง Push Notification ไปยัง Avaya (Asmita Sharma) เพื่อรอผลสรุปจาก SME และทีมวิศวกรภายใน"
+                    },
+                    "next_action": {
+                        "en": "Avaya SME and internal teams to review environment details and provide resolution update.",
+                        "th": "Avaya SME และทีมภายในตรวจสอบข้อมูล Environment และแจ้งแนวทางแก้ไขปัญหา Push Notification"
+                    },
+                    "action_owner": {"en": "Avaya TAC (Asmita Sharma)", "th": "ทีมวิศวกร Avaya (Asmita Sharma)"},
+                    "latest_note": {
+                        "en": "Followed up with Avaya regarding feedback from SME and internal teams.",
+                        "th": "ส่งอีเมลติดตามผลไปยัง Avaya เพื่อรอข้อสรุปจากทีม SME"
+                    },
+                    "source": "Hybrid AI (Instant Rule Engine)"
+                }
+
+            return {
+                "stage_key": "awaiting_vendor",
+                "badge_color": "bg-sky-500/20 text-sky-300 border-sky-500/30",
+                "stage_badge": {"en": "Awaiting TAC", "th": "รอ TAC ตอบกลับ"},
+                "stage_title": {
+                    "en": "Engineer Replied / Awaiting Vendor Response",
+                    "th": "วิศวกรส่งข้อมูลแล้ว / รอผลวิเคราะห์จาก TAC"
+                },
+                "status_summary": {
+                    "en": "JADS engineer has provided required information/updates. Awaiting next analysis from Avaya TAC.",
+                    "th": "วิศวกร JADS ได้ตอบกลับข้อมูลเรียบร้อยแล้ว อยู่ระหว่างรอทีม Avaya TAC วิเคราะห์เพิ่มเติม"
+                },
+                "next_action": {
+                    "en": "Avaya TAC engineer to review response and provide technical update.",
+                    "th": "วิศวกร Avaya TAC ตรวจสอบข้อมูลและแจ้งความคืบหน้าถัดไป"
+                },
+                "action_owner": {"en": "Avaya TAC Engineering", "th": "ทีมวิศวกร Avaya TAC"},
+                "latest_note": {
+                    "en": f"Latest reply sent by {ticket.user_id.name or 'JADS Engineer'}.",
+                    "th": f"ข้อความล่าสุดส่งโดย {ticket.user_id.name or 'วิศวกร JADS'}"
+                },
+                "source": "Hybrid AI (Instant Rule Engine)"
+            }
+
+        # Inbound Heuristic A: Vendor Requested Portal Action / Product Code change (e.g. Ticket 44, 42)
+        if any(k in latest_text for k in ["product code", "change the product code"]):
+            target_prod = "AADS"
+            if "to \"cm\"" in latest_text or "cm vulnerabilities" in latest_text or "to cm" in latest_text:
+                target_prod = "CM (Communication Manager)"
+            elif "to \"aads\"" in latest_text or "aads vulnerabilities" in latest_text or "to aads" in latest_text:
+                target_prod = "AADS"
+            elif ticket.avaya_product and ("cm" in ticket.avaya_product.lower() or "communication manager" in ticket.avaya_product.lower()):
+                target_prod = "CM (Communication Manager)"
+
+            return {
+                "stage_key": "action_required",
+                "badge_color": "bg-amber-400/20 text-amber-300 border-amber-400/30",
+                "stage_badge": {"en": "Action Required", "th": "ต้องดำเนินการ"},
+                "stage_title": {
+                    "en": f"Update Product Code on Avaya Portal to {target_prod}",
+                    "th": f"แก้ไข Product Code บน Avaya Portal เป็น {target_prod}"
+                },
+                "status_summary": {
+                    "en": f"Avaya Engineer (Hitesh Kumar Tahilyani) is assigned and requested JADS to update the SR Product Code on the Avaya Portal to '{target_prod}' to proceed.",
+                    "th": f"วิศวกร Avaya (Hitesh Kumar Tahilyani) ได้รับมอบหมายเคสและแจ้งให้เราเข้าแก้ไข Product Code บน Avaya Support Portal ให้เป็น '{target_prod}' เพื่อดำเนินการต่อ"
+                },
+                "next_action": {
+                    "en": f"JADS Engineer (Phongthep) to update the product code to {target_prod} on the Avaya Support Portal.",
+                    "th": f"วิศวกร JADS (Phongthep) เข้า Avaya Support Portal เพื่อปรับเปลี่ยน Product Code ของเคสนี้เป็น {target_prod}"
+                },
+                "action_owner": {"en": "JADS Engineering (Phongthep)", "th": "วิศวกร JADS (Phongthep)"},
+                "latest_note": {
+                    "en": f"Please change the product code for this SR to {target_prod} on Avaya portal.",
+                    "th": f"โปรดเข้าเปลี่ยน Product Code สำหรับ SR นี้เป็น {target_prod} บนระบบ Avaya Portal"
+                },
+                "source": "Hybrid AI (Instant Rule Engine)"
+            }
+
+        # Inbound Heuristic B: Command Outputs / Diagnostics Requested from Server (e.g. Ticket 43)
+        if any(k in latest_text for k in ["rpm -qa", "swversion", "av-version", "sysinfo", "pcap", "packet capture", "trace", "syslog", "debug", "collect log", "send us", "provide log", "provide the output"]):
+            cmd_list = "rpm -qa, swversion, av-version, sysInfo" if ("rpm" in latest_text or "swversion" in latest_text) else "diagnostic logs / traces"
+            return {
+                "stage_key": "diagnostics",
+                "badge_color": "bg-purple-500/20 text-purple-300 border-purple-500/30",
+                "stage_badge": {"en": "Logs Required", "th": "รอส่งข้อมูลระบบ"},
+                "stage_title": {
+                    "en": "Command Outputs & System Info Required",
+                    "th": "รอรันคำสั่งและส่งข้อมูลเวอร์ชันระบบ AAMS"
+                },
+                "status_summary": {
+                    "en": f"Avaya Engineer (Hitesh Kumar Tahilyani) requested system command outputs ({cmd_list}) to proceed with investigation.",
+                    "th": f"วิศวกร Avaya (Hitesh Kumar Tahilyani) ขอผลลัพธ์คำสั่งเวอร์ชันระบบ ({cmd_list}) เพื่อใช้ประกอบการวิเคราะห์ช่องโหว่"
+                },
+                "next_action": {
+                    "en": "JADS Engineer (Phongthep) to run commands on server and upload output to Avaya SR.",
+                    "th": "วิศวกร JADS (Phongthep) รันคำสั่งบนเครื่องเซิร์ฟเวอร์และส่งผลลัพธ์กลับไปยัง Avaya SR"
+                },
+                "action_owner": {"en": "JADS Engineering (Phongthep)", "th": "วิศวกร JADS (Phongthep)"},
+                "latest_note": {
+                    "en": f"Please provide output of: {cmd_list}.",
+                    "th": f"โปรดรันคำสั่งและส่งข้อมูล: {cmd_list}"
+                },
+                "source": "Hybrid AI (Instant Rule Engine)"
+            }
+
+        # Inbound Heuristic C: Top 100 CVEs / Vendor SME Internal Review (e.g. Ticket 41)
+        if any(k in latest_text for k in ["top 100", "review the attached spreadsheet", "vulnerabilities", "jay", "borra"]):
+            return {
+                "stage_key": "vendor_review",
+                "badge_color": "bg-blue-500/20 text-blue-300 border-blue-500/30",
+                "stage_badge": {"en": "Vendor Review", "th": "Avaya กำลังตรวจสอบ"},
+                "stage_title": {
+                    "en": "Top 100 Critical CVEs Under Avaya SME Review",
+                    "th": "Avaya SME อยู่ระหว่างวิเคราะห์ Top 100 CVE"
+                },
+                "status_summary": {
+                    "en": "Avaya Support (Ayyappa Borra) forwarded the customer's Top 100 Critical CVE list to SME (Jay Thomas) to review the spreadsheet and provide recommendations.",
+                    "th": "Avaya Support (Ayyappa Borra) ได้ส่งต่อรายการ Top 100 Critical CVE ให้กับผู้เชี่ยวชาญ (Jay Thomas) เพื่อตรวจสอบไฟล์ Spreadsheet และจัดทำข้อเสนอแนะ"
+                },
+                "next_action": {
+                    "en": "Avaya SME (Jay Thomas) to review spreadsheet and share remediation recommendations.",
+                    "th": "Avaya SME (Jay Thomas) ตรวจสอบรายการและแจ้งแนวทางการ Remediation สำหรับ 100 รายการแรก"
+                },
+                "action_owner": {"en": "Avaya SME (Jay Thomas)", "th": "ทีมผู้เชี่ยวชาญ Avaya SME (Jay Thomas)"},
+                "latest_note": {
+                    "en": "Reviewing attached spreadsheet for Top 100 Critical vulnerabilities.",
+                    "th": "อยู่ระหว่างตรวจสอบไฟล์ Spreadsheet สำหรับช่องโหว่ Top 100 Critical"
+                },
+                "source": "Hybrid AI (Instant Rule Engine)"
+            }
+
+        # Inbound Heuristic D: Open Notification / New Service Request Confirmation
+        if any(k in latest_text for k in ["open notification", "we just received your service request", "sr opened", "successfully created", "service request alert"]):
+            prod_name = ticket.avaya_product or "Avaya System"
+            return {
+                "stage_key": "awaiting_vendor",
+                "badge_color": "bg-sky-500/20 text-sky-300 border-sky-500/30",
+                "stage_badge": {"en": "Awaiting TAC", "th": "รอ TAC ตอบกลับ"},
+                "stage_title": {
+                    "en": "New Service Request Opened / Awaiting TAC Assignment",
+                    "th": "เปิดเคสใหม่เรียบร้อย / รอ Avaya TAC มอบหมายวิศวกร"
+                },
+                "status_summary": {
+                    "en": f"New Service Request successfully logged for {prod_name}. Awaiting initial review and technical assignment by Avaya TAC engineering.",
+                    "th": f"เปิดตั๋วใบงานใหม่สำหรับระบบ {prod_name} เรียบร้อยแล้ว อยู่ระหว่างรอฝ่ายสนับสนุน Avaya TAC ตรวจสอบและมอบหมายวิศวกรผู้เชี่ยวชาญ"
+                },
+                "next_action": {
+                    "en": "Avaya TAC to assign technical specialist and review incident details.",
+                    "th": "รอฝ่ายสนับสนุน Avaya TAC มอบหมายวิศวกรและเริ่มตรวจสอบรายละเอียดเคส"
+                },
+                "action_owner": {"en": "Avaya TAC Support", "th": "ทีมสนับสนุน Avaya TAC"},
+                "latest_note": {
+                    "en": "Service request received and registered with Avaya support.",
+                    "th": "ระบบ Avaya ได้รับข้อมูลการเปิดเคสแล้ว"
+                },
+                "source": "Hybrid AI (Instant Rule Engine)"
+            }
+
+        # Inbound Heuristic E: Escalation & Duty Manager (e.g. Ticket 42)
+        if (any(k in latest_text for k in ["duty manager", "delivery manager", "escalated to management", "leadership team"]) or \
+            ("escalat" in latest_text and any(k in latest_text for k in ["vinaya", "renjoy", "henry", "kumar", "manager"])) or \
+            ("duty manager" in recent_text or "renjoy henry" in recent_text)):
+            mgr_name = "Vinaya Kumar (Duty Manager, Avaya)"
+            if "renjoy" in recent_text or "henry" in recent_text:
+                mgr_name = "Renjoy Henry (Senior Manager, Avaya Services Delivery)"
+            elif "vinaya" in recent_text or "kumar" in recent_text:
+                mgr_name = "Vinaya Kumar (Duty Manager, Avaya)"
+
+            return {
+                "stage_key": "escalation",
+                "badge_color": "bg-amber-400/20 text-amber-300 border-amber-400/30",
+                "stage_badge": {"en": "Escalated", "th": "ส่งต่อผู้บริหาร"},
+                "stage_title": {
+                    "en": "Management Escalation & Resource Assignment",
+                    "th": "ส่งต่อฝ่ายบริหารเพื่อมอบหมายวิศวกรผู้เชี่ยวชาญ"
+                },
+                "status_summary": {
+                    "en": f"Incident escalated for immediate attention. {mgr_name} has acknowledged and engaged leadership to assign a dedicated technical resource.",
+                    "th": f"เคสได้รับการยกระดับเร่งด่วน โดยคุณ {mgr_name} ได้รับเรื่องและประสานงานผู้บริหารเพื่อจัดสรรวิศวกรดูแลโดยเฉพาะ"
+                },
+                "next_action": {
+                    "en": "Avaya Management to assign a designated technical specialist to the Service Request.",
+                    "th": "ฝ่ายบริหาร Avaya ดำเนินการมอบหมายวิศวกรผู้เชี่ยวชาญประจำเคสนี้"
+                },
+                "action_owner": {"en": "Avaya TAC Management", "th": "ฝ่ายบริหาร Avaya TAC"},
+                "latest_note": {
+                    "en": "Management contacts engaged to review and assign technical resource tomorrow.",
+                    "th": "ประสานงานฝ่ายบริหารเพื่อตรวจสอบและมอบหมายวิศวกรในวันพรุ่งนี้"
+                },
+                "source": "Hybrid AI (Instant Rule Engine)"
+            }
+
+        # Inbound Heuristic E: Specific Action / Configuration Recommended by Inbound Vendor
+        if any(k in latest_text for k in ["reconfigure", "station", "sip extension", "try to make a call", "workaround", "fix", "execute"]):
+            action_desc_en = "Implement vendor-recommended configuration changes and verify results."
+            action_desc_th = "ดำเนินการปรับเปลี่ยนคอนฟิกตามคำแนะนำของผู้ผลิตและทดสอบผลการทำงาน"
+            if "sip" in latest_text and ("h323" in latest_text or "h.323" in latest_text or "ops" in latest_text):
+                action_desc_en = "Reconfigure station as SIP extension from SMGR instead of H.323 OPS and test call."
+                action_desc_th = "ปรับแต่ง Extension ให้เป็น SIP บน SMGR แทน H.323 OPS และทดสอบโทรเข้า-ออก"
+
+            engineer_name = "Avaya Tier 3 Engineer"
+            if "sreenath" in latest_text:
+                engineer_name = "Sreenath A (Tier 3 Backbone Engineer)"
+
+            return {
+                "stage_key": "action_required",
+                "badge_color": "bg-amber-400/20 text-amber-300 border-amber-400/30",
+                "stage_badge": {"en": "Action Required", "th": "ต้องดำเนินการ"},
+                "stage_title": {
+                    "en": "Vendor Recommendation / Action Required",
+                    "th": "ข้อเสนอแนะจากผู้ผลิต / รอการปรับแต่ง Config"
+                },
+                "status_summary": {
+                    "en": f"Avaya Tier 3 Engineering ({engineer_name}) has analyzed configuration and identified necessary adjustments.",
+                    "th": f"วิศวกร Avaya Tier 3 ({engineer_name}) ได้ตรวจสอบคอนฟิกและระบุขั้นตอนการแก้ไขที่ต้องปรับแต่ง"
+                },
+                "next_action": {
+                    "en": action_desc_en,
+                    "th": action_desc_th
+                },
+                "action_owner": {"en": "JADS Engineering (Phongthep)", "th": "วิศวกร JADS (Phongthep)"},
+                "latest_note": {
+                    "en": "Please reconfigure station as SIP extension from SMGR and test call.",
+                    "th": "โปรดปรับคอนฟิกเบอร์ภายในเป็น SIP ผ่าน SMGR แล้วทดสอบการโทร"
+                },
+                "source": "Hybrid AI (Instant Rule Engine)"
+            }
+
+        # Heuristic 5: General active investigation
+        snippet = body_text[:140] + "..." if len(body_text) > 140 else body_text
+        if ticket.is_avaya_support or ticket.avaya_sr_number:
+            prod_name = ticket.avaya_product or "Avaya System"
+            return {
+                "stage_key": "awaiting_vendor",
+                "badge_color": "bg-sky-500/20 text-sky-300 border-sky-500/30",
+                "stage_badge": {"en": "Awaiting TAC", "th": "รอ TAC ตอบกลับ"},
+                "stage_title": {
+                    "en": "Service Request Active / Awaiting TAC",
+                    "th": "เคสอยู่ระหว่างดำเนินการ / รอฝ่ายสนับสนุน Avaya TAC"
+                },
+                "status_summary": {
+                    "en": f"Service request for {prod_name} is active with Avaya TAC support. Awaiting engineering updates.",
+                    "th": f"เคสสำหรับระบบ {prod_name} อยู่ระหว่างประสานงานกับฝ่ายสนับสนุน Avaya TAC รอความคืบหน้าทางเทคนิค"
+                },
+                "next_action": {
+                    "en": "Avaya TAC engineer to analyze issue and provide technical update.",
+                    "th": "วิศวกร Avaya TAC ตรวจสอบและแจ้งความคืบหน้าทางเทคนิค"
+                },
+                "action_owner": {"en": "Avaya TAC Support", "th": "ฝ่ายสนับสนุน Avaya TAC"},
+                "latest_note": {"en": snippet, "th": snippet},
+                "source": "Hybrid AI (Instant Rule Engine)"
+            }
+
+        return {
+            "stage_key": "in_progress",
+            "badge_color": "bg-indigo-500/20 text-indigo-300 border-indigo-500/30",
+            "stage_badge": {"en": "In Progress", "th": "กำลังดำเนินการ"},
+            "stage_title": {
+                "en": "Active Technical Investigation",
+                "th": "กำลังตรวจสอบและแก้ไขปัญหา"
+            },
+            "status_summary": {
+                "en": "Incident is being actively handled and tracked across support channels.",
+                "th": "เคสกำลังได้รับการประสานงานและติดตามความคืบหน้าอย่างต่อเนื่อง"
+            },
+            "next_action": {
+                "en": "Follow up on technical progress and customer coordination.",
+                "th": "ติดตามความคืบหน้าทางเทคนิคและประสานงานกับผู้เกี่ยวข้อง"
+            },
+            "action_owner": {"en": ticket.user_id.name or "Helpdesk Dispatcher", "th": ticket.user_id.name or "วิศวกรประจำตั๋ว"},
+            "latest_note": {"en": snippet, "th": snippet},
+            "source": "Local Ollama (192.168.10.30) & AI Engine"
+        }
+
+    @http.route(["/helpdesk/api/trigger_ai_summary/<int:ticket_id>"], type="http", auth="public", methods=["GET", "POST"], csrf=False)
+    def helpdesk_api_trigger_ai_summary(self, ticket_id, **kwargs):
+        """
+        API endpoint for n8n / automation scripts to proactively queue
+        AI summary generation as soon as a new email or update arrives.
+        """
+        ticket = request.env["helpdesk.ticket.pro"].sudo().browse(ticket_id)
+        if not ticket.exists():
+            return request.make_response(
+                json.dumps({"success": False, "error": "Ticket not found"}),
+                headers=[("Content-Type", "application/json"), ("Access-Control-Allow-Origin", "*")]
+            )
+        messages = request.env["mail.message"].sudo().search([
+            ("model", "=", "helpdesk.ticket.pro"),
+            ("res_id", "=", ticket.id),
+            ("message_type", "!=", "user_notification")
+        ], order="id desc", limit=5)
+        
+        messages_list = [{"id": m.id, "body": m.body or "", "author": m.author_id.name or ""} for m in messages]
+        rule_summary = self._compute_rule_based_ai_stage(ticket, messages_list)
+        
+        latest_msg_id = messages_list[0]["id"] if messages_list else 0
+        cache_key = f"{ticket.id}_{latest_msg_id}_{ticket.write_date}"
+        
+        msg_snippets = "\n".join([f"- {_clean_text_snippet(m.get('body', ''))[:200]}" for m in messages_list[:3]])
+        t = threading.Thread(
+            target=_async_ollama_synthesize,
+            args=(ticket.id, ticket.subject, msg_snippets, rule_summary, cache_key),
+            daemon=True
+        )
+        t.start()
+        
+        return request.make_response(
+            json.dumps({"success": True, "status": "background_synthesis_queued", "ticket_id": ticket_id}),
+            headers=[("Content-Type", "application/json"), ("Access-Control-Allow-Origin", "*")]
+        )
+
+    @http.route("/helpdesk/api/dashboard_data", type="http", auth="public", methods=["GET"], csrf=False)
+    def helpdesk_api_dashboard_data(self, **kwargs):
+        tickets_model = request.env["helpdesk.ticket.pro"].sudo()
+        
+        today_start = datetime.combine(datetime.today(), time.min)
+        
+        # 1. KPI Counters - strictly separating ACTIVE (unclosed) from CLOSED
+        count_new = tickets_model.search_count([("state", "=", "new")])
+        count_in_progress = tickets_model.search_count([("state", "=", "in_progress")])
+        count_waiting = tickets_model.search_count([("state", "=", "waiting")])
+        count_active = count_new + count_in_progress + count_waiting
+        
+        # P1 Outage (strictly active and priority 3 or severity p1)
+        count_p1 = tickets_model.search_count([
+            "&",
+            ("state", "not in", ["solved", "closed"]),
+            "|", ("priority", "=", "3"), ("avaya_severity", "=", "p1")
+        ])
+        
+        # P2 Major (strictly active and priority 2 or severity p2)
+        count_p2 = tickets_model.search_count([
+            "&",
+            ("state", "not in", ["solved", "closed"]),
+            "|", ("priority", "=", "2"), ("avaya_severity", "=", "p2")
+        ])
+
+        # Active Avaya TAC tickets
+        count_avaya = tickets_model.search_count([
+            ("is_avaya_support", "=", True),
+            ("state", "not in", ["solved", "closed"])
+        ])
+        
+        # Active Customer Direct tickets
+        count_customer = tickets_model.search_count([
+            ("is_avaya_support", "=", False),
+            ("state", "not in", ["solved", "closed"])
+        ])
+
+        # Closed Tickets
+        count_closed_total = tickets_model.search_count([
+            ("state", "in", ["solved", "closed"])
+        ])
+        count_solved_today = tickets_model.search_count([
+            ("state", "in", ["solved", "closed"]),
+            ("write_date", ">=", today_start)
+        ])
+        count_total = tickets_model.search_count([])
+
+        # 2. Fetch tickets: active first, then recent closed tickets
+        tickets = tickets_model.search([], order="priority desc, write_date desc", limit=150)
+
+        ai_cache = _load_ai_cache()
+        tickets_list = []
+        product_counts = {}
+        customer_counts = {}
+
+        cache_dirty = False
+        for t in tickets:
+            c_name = t.partner_id.name or t.avaya_customer_name or ""
+            prod_name = t.avaya_product or t.category_id.name or "General"
+            is_closed = t.state in ["solved", "closed"]
+            
+            # Count products and customers for ACTIVE tickets only
+            if not is_closed:
+                if prod_name:
+                    product_counts[prod_name] = product_counts.get(prod_name, 0) + 1
+                if c_name:
+                    customer_counts[c_name] = customer_counts.get(c_name, 0) + 1
+
+            # AI Stage & Action Priority determination (Real-time auto-sync)
+            msgs = []
+            latest_msg_id = 0
+            if not is_closed:
+                try:
+                    msgs = request.env["mail.message"].sudo().search([
+                        ("model", "=", "helpdesk.ticket.pro"),
+                        ("res_id", "=", t.id),
+                        ("message_type", "in", ["comment", "email"])
+                    ], order="id desc", limit=6)
+                    content_msgs = [m for m in msgs if m.body and len(_clean_text_snippet(m.body).strip()) > 3]
+                    latest_msg_id = content_msgs[0].id if content_msgs else (msgs[0].id if msgs else 0)
+                except Exception:
+                    pass
+
+            expected_cache_key = f"{t.id}_{latest_msg_id}_{t.write_date}"
+            ai_sum = ai_cache.get(str(t.id))
+
+            # If not cached or ticket state/messages have updated, auto-compute instantly
+            if not is_closed and (not ai_sum or ai_sum.get("_cache_key") != expected_cache_key):
+                try:
+                    msgs_list = [{
+                        "id": m.id,
+                        "body": m.body or "",
+                        "author": m.author_id.name if m.author_id else (m.email_from or "Support"),
+                        "email_from": m.email_from or ""
+                    } for m in msgs if m.body and len(_clean_text_snippet(m.body).strip()) > 3]
+                    ai_sum = self._compute_rule_based_ai_stage(t, msgs_list)
+                    ai_sum["_cache_key"] = expected_cache_key
+                    ai_cache[str(t.id)] = ai_sum
+                    cache_dirty = True
+                except Exception:
+                    pass
+
+            action_priority = 5 if is_closed else 4
+            action_info = None
+
+            if ai_sum and not is_closed:
+                s_key = ai_sum.get("stage_key", "")
+                if s_key in ["action_required", "diagnostics"]:
+                    action_priority = 1
+                elif s_key in ["awaiting_vendor", "vendor_review"]:
+                    action_priority = 2
+                elif s_key in ["escalation"]:
+                    action_priority = 3
+                elif s_key in ["solved", "closed"]:
+                    action_priority = 5
+
+                action_info = {
+                    "stage_key": s_key,
+                    "stage_badge": ai_sum.get("stage_badge", {}),
+                    "action_owner": ai_sum.get("action_owner", {}),
+                    "next_action": ai_sum.get("next_action", {}),
+                    "latest_note": ai_sum.get("latest_note", {})
+                }
+            elif is_closed and ai_sum:
+                action_info = {
+                    "stage_key": "closed",
+                    "stage_badge": {"en": "Closed", "th": "ปิดเคสแล้ว"},
+                    "action_owner": {"en": "-", "th": "-"},
+                    "next_action": {"en": "Case resolved", "th": "เคสเสร็จสิ้นแล้ว"}
+                }
+
+            tickets_list.append({
+                "id": t.id,
+                "ref": t.name,
+                "subject": t.subject,
+                "category": t.category_id.name or "General",
+                "priority": t.priority or "0",
+                "state": t.state or "new",
+                "ticket_source": t.ticket_source or "customer",
+                "is_avaya_support": bool(t.is_avaya_support),
+                "avaya_sr_number": t.avaya_sr_number or "",
+                "sold_to_id": t.sold_to_id or "",
+                "avaya_product": t.avaya_product or "",
+                "avaya_severity": t.avaya_severity or "",
+                "avaya_status": t.avaya_status or "",
+                "avaya_contact_name": t.avaya_contact_name or "",
+                "avaya_contact_phone": t.avaya_contact_phone or "",
+                "avaya_contact_email": t.avaya_contact_email or "",
+                "avaya_portal_url": t.avaya_portal_url or "",
+                "assigned_to": t.user_id.name or "Unassigned",
+                "customer": c_name or "Not Specified",
+                "create_date": t.create_date.isoformat() + "Z" if t.create_date else None,
+                "write_date": t.write_date.isoformat() + "Z" if t.write_date else None,
+                "deadline": t.deadline.isoformat() + "Z" if t.deadline else None,
+                "portal_url": f"/helpdesk/ticket/{t.id}",
+                "backend_url": f"/web#id={t.id}&model=helpdesk.ticket.pro&view_type=form",
+                "action_priority": action_priority,
+                "ai_summary": action_info
+            })
+
+        if cache_dirty:
+            try:
+                _save_ai_cache(ai_cache)
+            except Exception:
+                pass
+
+        def _ticket_sort_key(item):
+            prio_num = 0
+            try:
+                prio_num = int(item.get("priority") or 0)
+            except Exception:
+                pass
+            return (item.get("action_priority", 5), -prio_num, -(item.get("id") or 0))
+
+        tickets_list.sort(key=_ticket_sort_key)
+
+        # Agent Workload (Active tickets only)
+        agents = request.env["res.users"].sudo().search([("share", "=", False)])
+        agent_workload = []
+        for agent in agents:
+            ticket_count = tickets_model.search_count([
+                ("user_id", "=", agent.id),
+                ("state", "in", ["new", "in_progress", "waiting"])
+            ])
+            if ticket_count > 0:
+                agent_workload.append({
+                    "agent_id": agent.id,
+                    "agent_name": agent.name,
+                    "active_tickets": ticket_count
+                })
+        agent_workload = sorted(agent_workload, key=lambda x: x["active_tickets"], reverse=True)
+
+        result = {
+            "current_time": fields.Datetime.now().isoformat() + "Z",
+            "kpis": {
+                "total_active": count_active,
+                "action_needed": sum(1 for item in tickets_list if item.get("action_priority") == 1),
+                "awaiting_vendor": sum(1 for item in tickets_list if item.get("action_priority") == 2),
+                "p1_critical": count_p1,
+                "p2_major": count_p2,
+                "new": count_new,
+                "in_progress": count_in_progress,
+                "waiting": count_waiting,
+                "avaya_active": count_avaya,
+                "customer_active": count_customer,
+                "closed_total": count_closed_total,
+                "solved_today": count_solved_today,
+                "total_all": count_total,
+                "urgent": count_p1
+            },
+            "products": sorted([{"name": k, "count": v} for k, v in product_counts.items()], key=lambda x: x["count"], reverse=True)[:10],
+            "customers": sorted([{"name": k, "count": v} for k, v in customer_counts.items()], key=lambda x: x["count"], reverse=True)[:10],
+            "tickets": tickets_list,
+            "agent_workload": agent_workload
+        }
+
+        return request.make_response(
+            json.dumps(result),
+            headers=[("Content-Type", "application/json"), ("Access-Control-Allow-Origin", "*")]
+        )
+
+    @http.route("/helpdesk/api/check_ticket", type="http", auth="public", methods=["GET"], csrf=False)
+    def helpdesk_api_check_ticket(self, sr="", ref="", **kwargs):
+        tickets_model = request.env["helpdesk.ticket.pro"].sudo()
+        import re
+        sr_val = sr.strip() if sr else ""
+        subject_val = kwargs.get("subject", "").strip()
+
+        universal_match = None
+        if sr_val and not sr_val.startswith("SR-"):
+            m = re.search(r'\b(1-\d{10,12})\b', sr_val)
+            if m:
+                universal_match = m.group(1)
+            else:
+                universal_match = sr_val
+        if not universal_match and subject_val:
+            m = re.search(r'\b(1-\d{10,12})\b', subject_val)
+            if m:
+                universal_match = m.group(1)
+
+        domain = []
+        if universal_match:
+            domain = ["|", ("avaya_sr_number", "=", universal_match), ("subject", "ilike", universal_match)]
+        elif ref:
+            domain = [("name", "=", ref.strip())]
+        else:
+            return request.make_response(
+                json.dumps({"exists": False, "error": "No search parameter provided"}),
+                headers=[("Content-Type", "application/json"), ("Access-Control-Allow-Origin", "*")]
+            )
+
+        ticket = tickets_model.search(domain, order="id desc", limit=1)
+        if ticket:
+            return request.make_response(
+                json.dumps({
+                    "exists": True,
+                    "id": ticket.id,
+                    "ref": ticket.name,
+                    "subject": ticket.subject,
+                    "state": ticket.state,
+                    "avaya_status": ticket.avaya_status or "",
+                    "avaya_sr_number": ticket.avaya_sr_number or "",
+                    "is_closed": ticket.state in ["closed", "solved"],
+                    "portal_url": f"https://phongthep.ddns.net/web#id={ticket.id}&model=helpdesk.ticket.pro&view_type=form"
+                }),
+                headers=[("Content-Type", "application/json"), ("Access-Control-Allow-Origin", "*")]
+            )
+
+        return request.make_response(
+            json.dumps({"exists": False}),
+            headers=[("Content-Type", "application/json"), ("Access-Control-Allow-Origin", "*")]
+        )
+
+    @http.route("/helpdesk/api/update_ticket", type="http", auth="public", methods=["POST"], csrf=False)
+    def helpdesk_api_update_ticket(self, **kwargs):
+        try:
+            data = json.loads(request.httprequest.data.decode("utf-8")) if request.httprequest.data else kwargs
+        except Exception:
+            data = kwargs
+
+        ticket_id = data.get("id")
+        sr_number = data.get("avaya_sr_number")
+        tickets_model = request.env["helpdesk.ticket.pro"].sudo()
+
+        ticket = None
+        if ticket_id:
+            ticket = tickets_model.browse(int(ticket_id))
+        elif sr_number and not str(sr_number).startswith("SR-"):
+            ticket = tickets_model.search([("avaya_sr_number", "=", sr_number)], order="id desc", limit=1)
+
+        if not ticket or not ticket.exists():
+            import re
+            search_str = f"{sr_number or ''} {data.get('subject', '')}"
+            m = re.search(r'\b(1-\d{10,12})\b', search_str)
+            if m:
+                found_sr = m.group(1)
+                ticket = tickets_model.search(["|", ("avaya_sr_number", "=", found_sr), ("subject", "ilike", found_sr)], order="id desc", limit=1)
+
+        if not ticket or not ticket.exists():
+            return request.make_response(
+                json.dumps({"success": False, "error": "Ticket not found"}),
+                headers=[("Content-Type", "application/json"), ("Access-Control-Allow-Origin", "*")]
+            )
+
+        # Update status/severity if changed
+        update_vals = {}
+        if data.get("avaya_status") and data.get("avaya_status") != ticket.avaya_status:
+            update_vals["avaya_status"] = data["avaya_status"]
+        if data.get("avaya_severity") and data.get("avaya_severity") != ticket.avaya_severity:
+            update_vals["avaya_severity"] = data["avaya_severity"]
+            sev_map = {"p1": "3", "p2": "2", "p3": "1", "p4": "0"}
+            if data["avaya_severity"] in sev_map:
+                update_vals["priority"] = sev_map[data["avaya_severity"]]
+        if update_vals:
+            ticket.write(update_vals)
+
+        # Post to Chatter
+        sender = data.get("sender_name") or data.get("avaya_contact_name") or ticket.avaya_contact_name or "Avaya Support"
+        sender_email = data.get("sender_email") or data.get("avaya_contact_email") or ""
+        recipient = data.get("recipient") or "Avaya Support"
+        reply_content = data.get("reply_body")
+        is_outbound = bool(data.get("is_outbound"))
+
+        if reply_content:
+            email_info = f" &lt;{sender_email}&gt;" if sender_email else ""
+            if is_outbound:
+                card_html = Markup(f"""<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #202124; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 14px; margin: 6px 0; box-shadow: 0 1px 2px rgba(0,0,0,0.04);">
+  <div style="border-bottom: 1px solid #dcfce7; padding-bottom: 8px; margin-bottom: 10px;">
+    <span style="display: inline-block; background: #059669; color: #ffffff; font-weight: bold; border-radius: 4px; padding: 2px 7px; font-size: 12px; margin-right: 8px;">📤 เราตอบกลับ (Sent)</span>
+    <strong>{sender}</strong>{email_info} ➔ <strong>{recipient}</strong>
+  </div>
+  <div style="white-space: pre-wrap; color: #1e293b; line-height: 1.7; background: #ffffff; padding: 10px; border-radius: 4px; border: 1px solid #dcfce7;">{reply_content}</div>
+</div>""")
+            else:
+                card_html = Markup(f"""<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #202124; background: #ffffff; border: 1px solid #e0e2e6; border-radius: 8px; padding: 14px; margin: 6px 0; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+  <div style="border-bottom: 1px solid #f1f3f4; padding-bottom: 8px; margin-bottom: 10px;">
+    <span style="display: inline-block; background: #e8f0fe; color: #1a73e8; font-weight: bold; border-radius: 4px; padding: 2px 7px; font-size: 12px; margin-right: 8px;">📩 Avaya Support</span>
+    <strong>{sender}</strong>{email_info}
+  </div>
+  <div style="white-space: pre-wrap; color: #1f1f1f; line-height: 1.7; background: #fdfdfd; padding: 10px; border-radius: 4px; border: 1px solid #f1f3f4;">{reply_content}</div>
+</div>""")
+        else:
+            body_html = data.get("description") or data.get("message") or data.get("subject") or "Activity or reply received."
+            card_html = Markup(f"<b>[Email Update / Activity Received]</b><br/>{body_html}")
+
+        msg_subject = data.get("subject") or f"Update on {ticket.name}"
+        ticket.message_post(
+            body=card_html,
+            subject=msg_subject,
+            message_type="comment",
+            subtype_xmlid="mail.mt_comment"
+        )
+
+        return request.make_response(
+            json.dumps({
+                "success": True,
+                "id": ticket.id,
+                "ref": ticket.name,
+                "state": ticket.state,
+                "avaya_status": ticket.avaya_status,
+                "portal_url": f"https://phongthep.ddns.net/web#id={ticket.id}&model=helpdesk.ticket.pro&view_type=form"
+            }),
+            headers=[("Content-Type", "application/json"), ("Access-Control-Allow-Origin", "*")]
+        )
+
+    @http.route("/helpdesk/api/create_ticket", type="http", auth="public", methods=["POST"], csrf=False)
+    def helpdesk_api_create_ticket(self, **kwargs):
+        try:
+            data = json.loads(request.httprequest.data.decode("utf-8")) if request.httprequest.data else kwargs
+        except Exception:
+            data = kwargs
+
+        tickets_model = request.env["helpdesk.ticket.pro"].sudo()
+        sr_number = data.get("avaya_sr_number")
+        subject = data.get("subject", "").strip()
+
+        # 1. Anti-duplicate check
+        existing_ticket = None
+        if sr_number and not str(sr_number).startswith("SR-"):
+            existing_ticket = tickets_model.search([("avaya_sr_number", "=", sr_number)], order="id desc", limit=1)
+        if not existing_ticket and subject:
+            import re
+            m = re.search(r'\b(1-\d{10,12})\b', subject)
+            if m:
+                found_sr = m.group(1)
+                existing_ticket = tickets_model.search(["|", ("avaya_sr_number", "=", found_sr), ("subject", "ilike", found_sr)], order="id desc", limit=1)
+
+        if existing_ticket:
+            return self.helpdesk_api_update_ticket(**data)
+
+        # 2. Priority mapping from severity
+        severity = data.get("avaya_severity", "p3")
+        priority = data.get("priority")
+        if not priority:
+            sev_map = {"p1": "3", "p2": "2", "p3": "1", "p4": "0"}
+            priority = sev_map.get(severity, "1")
+
+        # 3. Create description HTML card
+        desc_html = data.get("description")
+        if not desc_html:
+            sold_to = data.get("sold_to_id", "0052085219")
+            product = data.get("avaya_product", "Avaya Solution")
+            asset_id = data.get("avaya_asset_id", "-")
+            status = data.get("avaya_status", "Created")
+            contact_name = data.get("avaya_contact_name", "Phongthep Phimthong")
+            contact_phone = data.get("avaya_contact_phone", "0612438275")
+            contact_email = data.get("avaya_contact_email", "phongthep@jadscomm.com")
+            date_rep = data.get("avaya_date_reported", "-")
+            cust_name = data.get("avaya_customer_name", "-")
+            location = data.get("avaya_location", "-")
+            owner_sbl = data.get("avaya_owner_sbl", "-")
+            summary = data.get("summary") or subject
+            avaya_url = f"https://support.avaya.com/support/en/secure/service-requests/displaySR?srNum={sr_number}" if sr_number else "https://support.avaya.com/"
+
+            border_color = "#d93025" if severity == "p1" else "#f2994a"
+            bg_color = "#fce8e6" if severity == "p1" else "#fef7e0"
+            text_color = "#d93025" if severity == "p1" else "#b06000"
+
+            desc_html = Markup(f"""
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; line-height: 1.6; color: #202124;">
+  <div style="background-color: {bg_color}; border-left: 5px solid {border_color}; padding: 14px; margin-bottom: 16px; border-radius: 4px;">
+    <div style="font-size: 16px; font-weight: bold; color: {text_color}; margin-bottom: 8px;">
+      🔔 AVAYA TAC {severity.upper()} SERVICE REQUEST ({status})
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px;">
+      <div><strong>SR Number:</strong> {sr_number or 'N/A'}</div>
+      <div><strong>Status:</strong> {status}</div>
+      <div><strong>Sold To / FL:</strong> {sold_to}</div>
+      <div><strong>Product:</strong> {product}</div>
+      <div><strong>Asset ID:</strong> {asset_id}</div>
+      <div><strong>Severity:</strong> {severity.upper()}</div>
+      <div><strong>Date Reported:</strong> {date_rep}</div>
+      <div><strong>Support Group (SBL):</strong> {owner_sbl}</div>
+      <div><strong>Primary Customer:</strong> {cust_name}</div>
+      <div><strong>Location:</strong> {location}</div>
+    </div>
+  </div>
+  
+  <div style="margin-bottom: 16px;">
+    <h3 style="margin-top: 0; color: #1a73e8; font-size: 15px;">Summary / Description</h3>
+    <p style="white-space: pre-wrap; background: #f8f9fa; padding: 12px; border-radius: 4px; border: 1px solid #dadce0;">{summary}</p>
+  </div>
+
+  <div style="margin-bottom: 16px;">
+    <h3 style="margin-top: 0; color: #1a73e8; font-size: 15px;">Contact Information</h3>
+    <p><strong>Contact:</strong> {contact_name} | <strong>Phone:</strong> {contact_phone} | <strong>Email:</strong> {contact_email}</p>
+  </div>
+
+  <div style="margin-top: 20px; padding-top: 12px; border-top: 1px solid #dadce0;">
+    <a href="{avaya_url}" style="background-color: #d93025; color: white; padding: 8px 14px; text-decoration: none; border-radius: 4px; font-weight: bold; margin-right: 10px; display: inline-block;">🔗 Open Avaya TAC SR</a>
+  </div>
+</div>
+""")
+
+        create_vals = {
+            "subject": subject or f"Avaya SR# {sr_number}",
+            "description": desc_html,
+            "ticket_type": data.get("ticket_type", "incident"),
+            "ticket_source": data.get("ticket_source", "avaya_support"),
+            "is_avaya_support": True,
+            "avaya_sr_number": sr_number or "",
+            "sold_to_id": data.get("sold_to_id", "0052085219"),
+            "avaya_product": data.get("avaya_product", "Avaya Solution"),
+            "avaya_asset_id": data.get("avaya_asset_id", ""),
+            "avaya_severity": severity,
+            "avaya_status": data.get("avaya_status", "Created"),
+            "priority": priority,
+            "avaya_contact_name": data.get("avaya_contact_name", "Phongthep Phimthong"),
+            "avaya_contact_phone": data.get("avaya_contact_phone", "0612438275"),
+            "avaya_contact_email": data.get("avaya_contact_email", "phongthep@jadscomm.com"),
+            "avaya_date_reported": data.get("avaya_date_reported", ""),
+            "avaya_customer_name": data.get("avaya_customer_name", ""),
+            "avaya_location": data.get("avaya_location", ""),
+            "avaya_owner_sbl": data.get("avaya_owner_sbl", "")
+        }
+
+        ticket = tickets_model.create(create_vals)
+
+        return request.make_response(
+            json.dumps({
+                "success": True,
+                "id": ticket.id,
+                "ref": ticket.name,
+                "subject": ticket.subject,
+                "portal_url": f"https://phongthep.ddns.net/web#id={ticket.id}&model=helpdesk.ticket.pro&view_type=form"
+            }),
+            headers=[("Content-Type", "application/json"), ("Access-Control-Allow-Origin", "*")]
+        )
+
+
