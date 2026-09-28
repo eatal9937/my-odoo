@@ -209,6 +209,20 @@ class HelpdeskTicketPro(models.Model):
             if sr_num and sr_num.startswith('SR-'):
                 sr_num = None  # ignore fake timestamp fallbacks
 
+            # Enforce authentic Avaya SR number for all Avaya Support tickets
+            if vals.get('is_avaya_support'):
+                if not sr_num:
+                    subj = vals.get('subject', '')
+                    desc = vals.get('description', '')
+                    sr_match = re.search(r'\b(1-\d{10,12})\b', (subj or '') + ' ' + (desc or ''))
+                    if sr_match:
+                        sr_num = sr_match.group(1)
+                        vals['avaya_sr_number'] = sr_num
+
+                if not sr_num and 'PLDS' not in (vals.get('subject') or ''):
+                    _logger.warning("Blocked creation of Avaya support ticket without SR number: %s", vals.get('subject'))
+                    continue
+
             # 1. Deduplication check by explicit Avaya SR#
             if sr_num:
                 existing = self.search([
