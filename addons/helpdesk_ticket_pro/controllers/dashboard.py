@@ -355,7 +355,7 @@ class HelpdeskDashboardController(http.Controller):
             "write_date": ticket.write_date.isoformat() + "Z" if ticket.write_date else None,
             "deadline": ticket.deadline.isoformat() + "Z" if ticket.deadline else None,
             "portal_url": f"/helpdesk/ticket/{ticket.id}",
-            "backend_url": f"https://phongthep.lol/helpdesk/ticket/{ticket.id}"
+            "backend_url": f"https://phongthep.lol/web#id={ticket.id}&model=helpdesk.ticket.pro&view_type=form"
         }
 
         messages_model = request.env["mail.message"].sudo()
@@ -1318,7 +1318,7 @@ class HelpdeskDashboardController(http.Controller):
                 "write_date": t.write_date.isoformat() + "Z" if t.write_date else None,
                 "deadline": t.deadline.isoformat() + "Z" if t.deadline else None,
                 "portal_url": f"/helpdesk/ticket/{t.id}",
-                "backend_url": f"/web#id={t.id}",
+                "backend_url": f"/web#id={t.id}&model=helpdesk.ticket.pro&view_type=form",
                 "action_priority": action_priority,
                 "ai_summary": action_info
             })

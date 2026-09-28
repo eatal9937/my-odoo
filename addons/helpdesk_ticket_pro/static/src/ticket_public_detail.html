@@ -633,7 +633,10 @@
       }
 
       // Backend link
-      document.getElementById('backendBtn').href = t.backend_url || `/web#id=${t.id}&model=helpdesk.ticket.pro&view_type=form`;
+      const backendUrl = (t.backend_url && !t.backend_url.includes('/helpdesk/ticket/'))
+        ? t.backend_url
+        : `/web#id=${t.id}&model=helpdesk.ticket.pro&view_type=form`;
+      document.getElementById('backendBtn').href = backendUrl;
 
       // Render Messages Timeline
       renderMessages(messages);
